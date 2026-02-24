@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   CHARACTER_OPTIONS,
   RATE_BAND_OPTIONS,
@@ -35,8 +35,11 @@ type MatchRecordModalProps = {
   isOpen: boolean;
   mode: "create" | "edit";
   initialValues?: MatchRecordValues;
+  createInitialValues?: Partial<MatchRecordValues>;
+  historyRecords?: MatchRecordValues[];
+  isSubmitting?: boolean;
   onClose: () => void;
-  onSubmit: (values: MatchRecordValues) => void;
+  onSubmit: (values: MatchRecordValues) => void | Promise<void>;
 };
 
 const defaultValues: MatchRecordValues = {
@@ -73,19 +76,103 @@ const getCurrentDatetimeLocalValue = () => {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
-const buildCreateDefaults = (): MatchRecordValues => ({
+const buildCreateDefaults = (overrideValues?: Partial<MatchRecordValues>): MatchRecordValues => ({
   ...defaultValues,
+  ...overrideValues,
   playedAt: getCurrentDatetimeLocalValue()
 });
+
+type UsageStat = {
+  count: number;
+  latestPlayedAt: number;
+};
+
+const parsePlayedAt = (playedAt: string) => {
+  const timestamp = new Date(playedAt).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+
+const buildUsageStats = (records: MatchRecordValues[], key: keyof MatchRecordValues) => {
+  const stats = new Map<string, UsageStat>();
+
+  records.forEach((record) => {
+    const rawValue = record[key];
+    if (typeof rawValue !== "string") {
+      return;
+    }
+
+    const value = rawValue.trim();
+    if (value.length === 0) {
+      return;
+    }
+
+    const current = stats.get(value);
+    const timestamp = parsePlayedAt(record.playedAt);
+    if (!current) {
+      stats.set(value, { count: 1, latestPlayedAt: timestamp });
+      return;
+    }
+
+    stats.set(value, {
+      count: current.count + 1,
+      latestPlayedAt: Math.max(current.latestPlayedAt, timestamp)
+    });
+  });
+
+  return stats;
+};
+
+const sortCharacterOptions = (
+  stats: Map<string, UsageStat>
+): typeof CHARACTER_OPTIONS => {
+  return [...CHARACTER_OPTIONS].sort((left, right) => {
+    const leftStat = stats.get(left.value);
+    const rightStat = stats.get(right.value);
+
+    const countDiff = (rightStat?.count ?? 0) - (leftStat?.count ?? 0);
+    if (countDiff !== 0) {
+      return countDiff;
+    }
+
+    const latestDiff = (rightStat?.latestPlayedAt ?? 0) - (leftStat?.latestPlayedAt ?? 0);
+    if (latestDiff !== 0) {
+      return latestDiff;
+    }
+
+    return left.label.localeCompare(right.label, "ja");
+  });
+};
+
+const sortRacketOptions = (stats: Map<string, UsageStat>) => {
+  return [...RACKET_OPTIONS].sort((left, right) => {
+    const leftStat = stats.get(left);
+    const rightStat = stats.get(right);
+
+    const countDiff = (rightStat?.count ?? 0) - (leftStat?.count ?? 0);
+    if (countDiff !== 0) {
+      return countDiff;
+    }
+
+    const latestDiff = (rightStat?.latestPlayedAt ?? 0) - (leftStat?.latestPlayedAt ?? 0);
+    if (latestDiff !== 0) {
+      return latestDiff;
+    }
+
+    return left.localeCompare(right, "ja");
+  });
+};
 
 function MatchRecordModal({
   isOpen,
   mode,
   initialValues,
+  createInitialValues,
+  historyRecords = [],
+  isSubmitting = false,
   onClose,
   onSubmit
 }: MatchRecordModalProps) {
-  const [values, setValues] = useState<MatchRecordValues>(buildCreateDefaults);
+  const [values, setValues] = useState<MatchRecordValues>(() => buildCreateDefaults(createInitialValues));
 
   useEffect(() => {
     if (!isOpen) {
@@ -95,12 +182,44 @@ function MatchRecordModal({
       setValues(initialValues);
       return;
     }
-    setValues(buildCreateDefaults());
-  }, [initialValues, isOpen, mode]);
+    setValues(buildCreateDefaults(createInitialValues));
+  }, [createInitialValues, initialValues, isOpen, mode]);
 
   const selectedRule = RULE_OPTIONS.find((option) => option.value === values.rule) ?? RULE_OPTIONS[0];
   const isDoubles = selectedRule.isDoubles;
   const hasFeverRacket = selectedRule.hasFeverRacket;
+  const myCharacterOptions = useMemo(
+    () => sortCharacterOptions(buildUsageStats(historyRecords, "myCharacter")),
+    [historyRecords]
+  );
+  const opponentCharacterOptions = useMemo(
+    () => sortCharacterOptions(buildUsageStats(historyRecords, "opponentCharacter")),
+    [historyRecords]
+  );
+  const myPartnerCharacterOptions = useMemo(
+    () => sortCharacterOptions(buildUsageStats(historyRecords, "myPartnerCharacter")),
+    [historyRecords]
+  );
+  const opponentPartnerCharacterOptions = useMemo(
+    () => sortCharacterOptions(buildUsageStats(historyRecords, "opponentPartnerCharacter")),
+    [historyRecords]
+  );
+  const myRacketOptions = useMemo(
+    () => sortRacketOptions(buildUsageStats(historyRecords, "myRacket")),
+    [historyRecords]
+  );
+  const opponentRacketOptions = useMemo(
+    () => sortRacketOptions(buildUsageStats(historyRecords, "opponentRacket")),
+    [historyRecords]
+  );
+  const myPartnerRacketOptions = useMemo(
+    () => sortRacketOptions(buildUsageStats(historyRecords, "myPartnerRacket")),
+    [historyRecords]
+  );
+  const opponentPartnerRacketOptions = useMemo(
+    () => sortRacketOptions(buildUsageStats(historyRecords, "opponentPartnerRacket")),
+    [historyRecords]
+  );
 
   if (!isOpen) {
     return null;
@@ -110,6 +229,9 @@ function MatchRecordModal({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isSubmitting) {
+      return;
+    }
     const normalizedValues: MatchRecordValues = { ...values };
 
     if (!isDoubles) {
@@ -253,7 +375,7 @@ function MatchRecordModal({
                 }
                 required
               >
-                {CHARACTER_OPTIONS.map((option) => (
+                {myCharacterOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -273,7 +395,7 @@ function MatchRecordModal({
                 }
                 required
               >
-                {CHARACTER_OPTIONS.map((option) => (
+                {opponentCharacterOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -296,7 +418,7 @@ function MatchRecordModal({
                   }
                   required
                 >
-                  {CHARACTER_OPTIONS.map((option) => (
+                  {myPartnerCharacterOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
@@ -316,7 +438,7 @@ function MatchRecordModal({
                   }
                   required
                 >
-                  {CHARACTER_OPTIONS.map((option) => (
+                  {opponentPartnerCharacterOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
@@ -342,7 +464,7 @@ function MatchRecordModal({
                     }
                     required
                   >
-                    {RACKET_OPTIONS.map((option) => (
+                    {myRacketOptions.map((option) => (
                       <option key={option} value={option}>
                         {option}
                       </option>
@@ -362,7 +484,7 @@ function MatchRecordModal({
                     }
                     required
                   >
-                    {RACKET_OPTIONS.map((option) => (
+                    {opponentRacketOptions.map((option) => (
                       <option key={option} value={option}>
                         {option}
                       </option>
@@ -385,7 +507,7 @@ function MatchRecordModal({
                       }
                       required
                     >
-                      {RACKET_OPTIONS.map((option) => (
+                      {myPartnerRacketOptions.map((option) => (
                         <option key={option} value={option}>
                           {option}
                         </option>
@@ -405,7 +527,7 @@ function MatchRecordModal({
                       }
                       required
                     >
-                      {RACKET_OPTIONS.map((option) => (
+                      {opponentPartnerRacketOptions.map((option) => (
                         <option key={option} value={option}>
                           {option}
                         </option>
@@ -528,11 +650,11 @@ function MatchRecordModal({
           )}
 
           <div className="modal-actions">
-            <button type="button" className="button secondary" onClick={onClose}>
+            <button type="button" className="button secondary" onClick={onClose} disabled={isSubmitting}>
               キャンセル
             </button>
-            <button type="submit" className="button primary">
-              保存
+            <button type="submit" className="button primary" disabled={isSubmitting}>
+              {isSubmitting ? "保存中..." : "保存"}
             </button>
           </div>
         </form>

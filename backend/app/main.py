@@ -9,8 +9,8 @@ app = FastAPI(title="MFStat API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"]
 )
@@ -59,3 +59,13 @@ def update_record(
     session.commit()
     session.refresh(record)
     return record
+
+
+@app.delete("/records/{record_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_record(record_id: int, session: Session = Depends(get_session)):
+    record = session.get(MatchRecord, record_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
+
+    session.delete(record)
+    session.commit()

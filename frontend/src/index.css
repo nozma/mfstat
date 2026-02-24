@@ -65,12 +65,22 @@ body {
   margin: 0;
 }
 
+.record-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .button {
   border: 0;
   border-radius: 8px;
   padding: 0.58rem 1rem;
   font-weight: 700;
   cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .button.primary {
@@ -81,6 +91,11 @@ body {
 .button.secondary {
   background: #e8eef2;
   color: #1d2a31;
+}
+
+.button.danger {
+  background: #bf3b3b;
+  color: #fff;
 }
 
 .modal-overlay {
@@ -149,6 +164,15 @@ body {
   display: flex;
   justify-content: flex-end;
   gap: 0.6rem;
+}
+
+.status-message {
+  margin: 0 0 1rem;
+}
+
+.status-message.error {
+  color: #9f2525;
+  font-weight: 700;
 }
 
 @media (max-width: 640px) {

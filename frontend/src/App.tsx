@@ -1,45 +1,62 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import MatchRecordModal, {
   MatchRecordValues
 } from "./components/MatchRecordModal";
+import {
+  MatchRecord,
+  createRecord,
+  deleteRecord,
+  listRecords,
+  updateRecord
+} from "./api/records";
 import { RULE_OPTIONS } from "./constants/options";
 
-type MatchRecord = MatchRecordValues & {
-  id: number;
-};
-
-const seedRecord: MatchRecord = {
-  id: 1,
-  playedAt: "2026-02-24T19:00",
-  rule: "singles_fever_on",
-  stage: "Stadium Court (Hard)",
-  myScore: "6",
-  opponentScore: "4",
-  myCharacter: "Mario",
-  myPartnerCharacter: "",
-  opponentCharacter: "Luigi",
-  opponentPartnerCharacter: "",
-  myRacket: "Flame Racket",
-  myPartnerRacket: "",
-  opponentRacket: "Ice Racket",
-  opponentPartnerRacket: "",
-  myRate: "1540",
-  myRateBand: "A",
-  opponentRateBand: "A-",
-  opponentPlayerName: "Rival01",
-  myPartnerPlayerName: "",
-  opponentPartnerPlayerName: ""
-};
-
 function App() {
-  const [records, setRecords] = useState<MatchRecord[]>([seedRecord]);
+  const [records, setRecords] = useState<MatchRecord[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRecordId, setEditingRecordId] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingRecordId, setDeletingRecordId] = useState<number | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const editingRecord = useMemo(
     () => records.find((record) => record.id === editingRecordId),
     [records, editingRecordId]
   );
+  const latestRecord = records[0];
+  const createInitialValues = useMemo<Partial<MatchRecordValues> | undefined>(() => {
+    if (!latestRecord) {
+      return undefined;
+    }
+
+    return {
+      rule: latestRecord.rule,
+      stage: latestRecord.stage,
+      myCharacter: latestRecord.myCharacter,
+      myRacket: latestRecord.myRacket,
+      myRate: latestRecord.myRate,
+      myRateBand: latestRecord.myRateBand,
+      opponentRateBand: latestRecord.opponentRateBand
+    };
+  }, [latestRecord]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setIsLoading(true);
+        setErrorMessage(null);
+        const fetchedRecords = await listRecords();
+        setRecords(fetchedRecords);
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "記録の取得に失敗しました。");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void load();
+  }, []);
 
   const openCreateModal = () => {
     setEditingRecordId(null);
@@ -52,26 +69,54 @@ function App() {
   };
 
   const closeModal = () => {
+    if (isSubmitting) {
+      return;
+    }
     setIsModalOpen(false);
   };
 
-  const handleSubmit = (values: MatchRecordValues) => {
-    if (editingRecordId === null) {
-      const nextId =
-        records.length === 0
-          ? 1
-          : Math.max(...records.map((record) => record.id)) + 1;
-      setRecords((prev) => [...prev, { id: nextId, ...values }]);
+  const handleSubmit = async (values: MatchRecordValues) => {
+    try {
+      setIsSubmitting(true);
+      setErrorMessage(null);
+
+      if (editingRecordId === null) {
+        const createdRecord = await createRecord(values);
+        setRecords((prev) => [createdRecord, ...prev]);
+      } else {
+        const updatedRecord = await updateRecord(editingRecordId, values);
+        setRecords((prev) =>
+          prev.map((record) => (record.id === updatedRecord.id ? updatedRecord : record))
+        );
+      }
+
       setIsModalOpen(false);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "記録の保存に失敗しました。");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm("この記録を削除しますか？")) {
       return;
     }
 
-    setRecords((prev) =>
-      prev.map((record) =>
-        record.id === editingRecordId ? { ...record, ...values } : record
-      )
-    );
-    setIsModalOpen(false);
+    try {
+      setDeletingRecordId(id);
+      setErrorMessage(null);
+      await deleteRecord(id);
+      setRecords((prev) => prev.filter((record) => record.id !== id));
+      if (editingRecordId === id) {
+        setEditingRecordId(null);
+        setIsModalOpen(false);
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "記録の削除に失敗しました。");
+    } finally {
+      setDeletingRecordId(null);
+    }
   };
 
   const ruleLabelByValue = useMemo(
@@ -92,9 +137,13 @@ function App() {
         </button>
       </header>
 
+      {errorMessage && <p className="status-message error">{errorMessage}</p>}
+
       <section className="record-list">
-        <h2>記録一覧（仮）</h2>
-        {records.length === 0 ? (
+        <h2>記録一覧</h2>
+        {isLoading ? (
+          <p className="status-message">読み込み中...</p>
+        ) : records.length === 0 ? (
           <p>まだ記録がありません。</p>
         ) : (
           <ul>
@@ -117,13 +166,24 @@ function App() {
                     <strong>自分レート:</strong> {record.myRate} ({record.myRateBand})
                   </p>
                 </div>
-                <button
-                  type="button"
-                  className="button secondary"
-                  onClick={() => openEditModal(record.id)}
-                >
-                  編集
-                </button>
+                <div className="record-actions">
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => openEditModal(record.id)}
+                    disabled={deletingRecordId === record.id}
+                  >
+                    編集
+                  </button>
+                  <button
+                    type="button"
+                    className="button danger"
+                    onClick={() => void handleDelete(record.id)}
+                    disabled={deletingRecordId === record.id}
+                  >
+                    {deletingRecordId === record.id ? "削除中..." : "削除"}
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -134,6 +194,9 @@ function App() {
         isOpen={isModalOpen}
         mode={editingRecord ? "edit" : "create"}
         initialValues={editingRecord}
+        createInitialValues={createInitialValues}
+        historyRecords={records}
+        isSubmitting={isSubmitting}
         onClose={closeModal}
         onSubmit={handleSubmit}
       />

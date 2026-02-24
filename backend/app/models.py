@@ -6,7 +6,24 @@ from sqlmodel import Field, SQLModel
 
 class MatchRecordBase(SQLModel):
     played_at: datetime
-    score: str = Field(min_length=1, max_length=100)
+    rule: str = Field(min_length=1, max_length=64)
+    stage: str = Field(min_length=1, max_length=200)
+    my_score: int = Field(ge=0, le=7)
+    opponent_score: int = Field(ge=0, le=7)
+    my_character: str = Field(min_length=1, max_length=100)
+    my_partner_character: Optional[str] = Field(default=None, max_length=100)
+    opponent_character: str = Field(min_length=1, max_length=100)
+    opponent_partner_character: Optional[str] = Field(default=None, max_length=100)
+    my_racket: Optional[str] = Field(default=None, max_length=100)
+    my_partner_racket: Optional[str] = Field(default=None, max_length=100)
+    opponent_racket: Optional[str] = Field(default=None, max_length=100)
+    opponent_partner_racket: Optional[str] = Field(default=None, max_length=100)
+    my_rate: int = Field(ge=0)
+    my_rate_band: str = Field(min_length=1, max_length=3)
+    opponent_rate_band: str = Field(min_length=1, max_length=3)
+    opponent_player_name: Optional[str] = Field(default=None, max_length=100)
+    my_partner_player_name: Optional[str] = Field(default=None, max_length=100)
+    opponent_partner_player_name: Optional[str] = Field(default=None, max_length=100)
 
 
 class MatchRecord(MatchRecordBase, table=True):
@@ -20,7 +37,24 @@ class MatchRecordCreate(MatchRecordBase):
 
 class MatchRecordUpdate(SQLModel):
     played_at: Optional[datetime] = None
-    score: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    rule: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    stage: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    my_score: Optional[int] = Field(default=None, ge=0, le=7)
+    opponent_score: Optional[int] = Field(default=None, ge=0, le=7)
+    my_character: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    my_partner_character: Optional[str] = Field(default=None, max_length=100)
+    opponent_character: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    opponent_partner_character: Optional[str] = Field(default=None, max_length=100)
+    my_racket: Optional[str] = Field(default=None, max_length=100)
+    my_partner_racket: Optional[str] = Field(default=None, max_length=100)
+    opponent_racket: Optional[str] = Field(default=None, max_length=100)
+    opponent_partner_racket: Optional[str] = Field(default=None, max_length=100)
+    my_rate: Optional[int] = Field(default=None, ge=0)
+    my_rate_band: Optional[str] = Field(default=None, min_length=1, max_length=3)
+    opponent_rate_band: Optional[str] = Field(default=None, min_length=1, max_length=3)
+    opponent_player_name: Optional[str] = Field(default=None, max_length=100)
+    my_partner_player_name: Optional[str] = Field(default=None, max_length=100)
+    opponent_partner_player_name: Optional[str] = Field(default=None, max_length=100)
 
 
 class MatchRecordRead(MatchRecordBase):
