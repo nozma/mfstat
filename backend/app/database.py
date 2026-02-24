@@ -23,6 +23,7 @@ MATCH_RECORD_REQUIRED_COLUMNS = {
     "opponent_racket",
     "opponent_partner_racket",
     "my_rate",
+    "result",
     "my_rate_band",
     "opponent_rate_band",
     "opponent_player_name",
@@ -30,6 +31,39 @@ MATCH_RECORD_REQUIRED_COLUMNS = {
     "opponent_partner_player_name",
     "created_at"
 }
+
+
+def _ensure_match_record_result_column() -> None:
+    existing_columns = _match_record_columns()
+    if "result" in existing_columns:
+        return
+
+    with engine.begin() as connection:
+        connection.exec_driver_sql("ALTER TABLE matchrecord ADD COLUMN result TEXT")
+        connection.exec_driver_sql(
+            """
+            UPDATE matchrecord
+            SET result = CASE
+                WHEN my_score > opponent_score THEN 'WIN'
+                WHEN my_score < opponent_score THEN 'LOSS'
+                ELSE 'DRAW'
+            END
+            """
+        )
+
+
+def _sync_match_record_result_values() -> None:
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            """
+            UPDATE matchrecord
+            SET result = CASE
+                WHEN my_score > opponent_score THEN 'WIN'
+                WHEN my_score < opponent_score THEN 'LOSS'
+                ELSE 'DRAW'
+            END
+            """
+        )
 
 
 def _match_record_table_exists() -> bool:
@@ -48,6 +82,8 @@ def _match_record_columns() -> set[str]:
 
 def init_db() -> None:
     if _match_record_table_exists():
+        _ensure_match_record_result_column()
+        _sync_match_record_result_values()
         existing_columns = _match_record_columns()
         if not MATCH_RECORD_REQUIRED_COLUMNS.issubset(existing_columns):
             with engine.begin() as connection:

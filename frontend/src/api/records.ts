@@ -2,6 +2,7 @@ import { MatchRecordValues } from "../components/MatchRecordModal";
 
 export type MatchRecord = MatchRecordValues & {
   id: number;
+  result: string;
   createdAt: string;
 };
 
@@ -22,6 +23,7 @@ type MatchRecordDto = {
   opponent_racket: string | null;
   opponent_partner_racket: string | null;
   my_rate: number;
+  result: string;
   my_rate_band: string;
   opponent_rate_band: string;
   opponent_player_name: string | null;
@@ -109,6 +111,7 @@ const fromDto = (dto: MatchRecordDto): MatchRecord => ({
   opponentRacket: dto.opponent_racket ?? "",
   opponentPartnerRacket: dto.opponent_partner_racket ?? "",
   myRate: String(dto.my_rate),
+  result: dto.result,
   myRateBand: dto.my_rate_band,
   opponentRateBand: dto.opponent_rate_band,
   opponentPlayerName: dto.opponent_player_name ?? "",

@@ -16,6 +16,14 @@ app.add_middleware(
 )
 
 
+def compute_result(my_score: int, opponent_score: int) -> str:
+    if my_score > opponent_score:
+        return "WIN"
+    if my_score < opponent_score:
+        return "LOSS"
+    return "DRAW"
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
@@ -35,6 +43,7 @@ def list_records(session: Session = Depends(get_session)):
 @app.post("/records", response_model=MatchRecordRead, status_code=status.HTTP_201_CREATED)
 def create_record(payload: MatchRecordCreate, session: Session = Depends(get_session)):
     record = MatchRecord.model_validate(payload)
+    record.result = compute_result(record.my_score, record.opponent_score)
     session.add(record)
     session.commit()
     session.refresh(record)
@@ -54,6 +63,7 @@ def update_record(
     update_data = payload.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(record, key, value)
+    record.result = compute_result(record.my_score, record.opponent_score)
 
     session.add(record)
     session.commit()
