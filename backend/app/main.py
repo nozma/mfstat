@@ -21,8 +21,10 @@ def _resolve_cors_origins() -> list[str]:
     return [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://0.0.0.0:5173",
         "http://localhost:8000",
-        "http://127.0.0.1:8000"
+        "http://127.0.0.1:8000",
+        "http://0.0.0.0:8000"
     ]
 
 
@@ -79,8 +81,9 @@ def list_records(session: Session = Depends(get_session)):
 
 @app.post("/records", response_model=MatchRecordRead, status_code=status.HTTP_201_CREATED)
 def create_record(payload: MatchRecordCreate, session: Session = Depends(get_session)):
-    record = MatchRecord.model_validate(payload)
-    record.result = compute_result(record.my_score, record.opponent_score)
+    payload_data = payload.model_dump()
+    payload_data["result"] = compute_result(payload.my_score, payload.opponent_score)
+    record = MatchRecord.model_validate(payload_data)
     session.add(record)
     session.commit()
     session.refresh(record)
