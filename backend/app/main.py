@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+import subprocess
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -52,6 +53,7 @@ def _resolve_frontend_dist_dir() -> Path | None:
 
 
 FRONTEND_DIST_DIR = _resolve_frontend_dist_dir()
+PROJECT_ROOT_DIR = Path(__file__).resolve().parents[2]
 
 app.add_middleware(
     CORSMiddleware,
@@ -80,6 +82,42 @@ def compute_result(my_score: int, opponent_score: int) -> str:
     return "DRAW"
 
 
+def _resolve_runtime_app_version() -> str:
+    tag_result = subprocess.run(
+        ["git", "-C", str(PROJECT_ROOT_DIR), "tag", "--points-at", "HEAD"],
+        check=False,
+        capture_output=True,
+        text=True
+    )
+    if tag_result.returncode == 0:
+        tag = next((line.strip() for line in tag_result.stdout.splitlines() if line.strip()), "")
+        if tag:
+            return tag
+
+    sha_result = subprocess.run(
+        ["git", "-C", str(PROJECT_ROOT_DIR), "rev-parse", "--short", "HEAD"],
+        check=False,
+        capture_output=True,
+        text=True
+    )
+    short_sha = sha_result.stdout.strip() if sha_result.returncode == 0 else ""
+
+    latest_tag_result = subprocess.run(
+        ["git", "-C", str(PROJECT_ROOT_DIR), "describe", "--tags", "--abbrev=0"],
+        check=False,
+        capture_output=True,
+        text=True
+    )
+    latest_tag = latest_tag_result.stdout.strip() if latest_tag_result.returncode == 0 else ""
+    if latest_tag and short_sha:
+        return f"{latest_tag}+{short_sha}"
+
+    if short_sha:
+        return f"dev-{short_sha}"
+
+    return os.getenv("MFSTAT_APP_VERSION", "unknown")
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
@@ -88,6 +126,11 @@ def on_startup() -> None:
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+@app.get("/app-version")
+def app_version():
+    return {"version": _resolve_runtime_app_version()}
 
 
 @app.get("/records", response_model=list[MatchRecordRead])

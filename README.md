@@ -77,9 +77,9 @@ PowerShellで実行:
 - Intel Mac向けはIntel Mac上で `make build-macos` を実行してください。
 - Windows向けはWindows環境上で `build_windows.ps1` を実行してください。
 - 配布前に各OSで起動確認してください。
-- 画面のバージョン表示は `MFSTAT_APP_VERSION` を使用します。
-  - タグ付きコミットでビルドした場合: タグ名（例: `v1.0.1`）
-  - タグなしコミットでビルドした場合: `dev-<shortsha>`
+- 画面のバージョン表示:
+  - 開発時 (`make dev`): 初回表示時・画面復帰時・「表示を更新」実行時に `/app-version` API から取得します（`HEAD` にタグがあればタグ名、なければ `<latest-tag>+<shortsha>`。タグが1つもなければ `dev-<shortsha>`）。
+  - ビルド時: `MFSTAT_APP_VERSION` が指定されていればそれを優先し、未指定なら `HEAD` のタグまたは `dev-<shortsha>` を使用します。
 
 ## Current UI Scope
 - 記録登録モーダル（新規登録）

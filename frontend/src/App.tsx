@@ -317,14 +317,35 @@ const formatTrendDate = (timestamp: number) => {
 
 const APP_VERSION = __APP_VERSION__;
 const APP_VERSION_FROM_ENV = import.meta.env.VITE_APP_VERSION;
-const DISPLAY_VERSION = APP_VERSION_FROM_ENV || APP_VERSION;
-const VERSION_LABEL =
-  DISPLAY_VERSION.startsWith("v") || DISPLAY_VERSION.startsWith("dev-")
-    ? DISPLAY_VERSION
-    : `v${DISPLAY_VERSION}`;
+const IS_DEV = import.meta.env.DEV;
+const DISPLAY_VERSION_FALLBACK = APP_VERSION_FROM_ENV || APP_VERSION;
+const DEFAULT_API_BASE_URL = import.meta.env.DEV ? "http://127.0.0.1:8000" : window.location.origin;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL;
+
+const formatVersionLabel = (value: string) =>
+  value.startsWith("v") || value.startsWith("dev-") ? value : `v${value}`;
+
+type AppVersionResponse = {
+  version: string;
+};
+
+const fetchAppVersion = async (): Promise<string | null> => {
+  const response = await fetch(`${API_BASE_URL}/app-version`);
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = (await response.json()) as AppVersionResponse;
+  const version = typeof data.version === "string" ? data.version.trim() : "";
+  if (version.length === 0 || version === "unknown") {
+    return null;
+  }
+  return version;
+};
 
 function App() {
   const gridApiRef = useGridApiRef();
+  const [versionLabel, setVersionLabel] = useState(() => formatVersionLabel(DISPLAY_VERSION_FALLBACK));
   const [records, setRecords] = useState<MatchRecord[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRecordId, setEditingRecordId] = useState<number | null>(null);
@@ -421,8 +442,49 @@ function App() {
     }
   };
 
+  const refreshVersionLabel = async (isMounted: () => boolean = () => true) => {
+    try {
+      const runtimeVersion = await fetchAppVersion();
+      if (!runtimeVersion || !isMounted()) {
+        return;
+      }
+      const nextLabel = formatVersionLabel(runtimeVersion);
+      setVersionLabel((current) => (current === nextLabel ? current : nextLabel));
+    } catch {
+      // バージョン取得に失敗した場合は現在の表示を維持する。
+    }
+  };
+
   useEffect(() => {
     void loadRecords("initial");
+  }, []);
+
+  useEffect(() => {
+    if (!IS_DEV) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const isMountedRef = () => isMounted;
+    const handleWindowFocus = () => {
+      void refreshVersionLabel(isMountedRef);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshVersionLabel(isMountedRef);
+      }
+    };
+
+    void refreshVersionLabel(isMountedRef);
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -501,6 +563,9 @@ function App() {
 
   const handleRefreshClick = () => {
     void loadRecords("manual");
+    if (IS_DEV) {
+      void refreshVersionLabel();
+    }
   };
 
   const handleInlineRowUpdate = async (newRow: MatchRecord) => {
@@ -1502,7 +1567,7 @@ function App() {
       <header className="page-header">
         <h1 className="app-title">
           MFStat
-          <span className="app-version">{VERSION_LABEL}</span>
+          <span className="app-version">{versionLabel}</span>
         </h1>
         <div className="page-header-actions">
           <Tooltip title="表示を更新" arrow>
