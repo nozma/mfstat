@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import {
   Box,
   Checkbox,
@@ -21,9 +21,12 @@ import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import {
   DataGrid,
+  GridCellParams,
   GridColDef,
   GridColumnVisibilityModel,
-  GridRenderCellParams
+  GridRenderCellParams,
+  GridRenderEditCellParams,
+  useGridApiRef
 } from "@mui/x-data-grid";
 import MatchRecordModal, {
   MatchRecordValues
@@ -96,6 +99,114 @@ const displayResultLabel = (value: string) => {
   return value;
 };
 
+const DatetimeEditCell = (params: GridRenderEditCellParams<MatchRecord, string>) => {
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+    void params.api.setEditCellValue(
+      { id: params.id, field: params.field, value: event.target.value },
+      event
+    );
+  };
+
+  return (
+    <TextField
+      type="datetime-local"
+      value={typeof params.value === "string" ? params.value : ""}
+      onChange={handleChange}
+      size="small"
+      fullWidth
+      slotProps={{ htmlInput: { step: 60 } }}
+    />
+  );
+};
+
+const toMatchRecordValues = (record: MatchRecord): MatchRecordValues => ({
+  playedAt: record.playedAt,
+  rule: record.rule,
+  stage: record.stage,
+  myScore: record.myScore,
+  opponentScore: record.opponentScore,
+  myCharacter: record.myCharacter,
+  myPartnerCharacter: record.myPartnerCharacter,
+  opponentCharacter: record.opponentCharacter,
+  opponentPartnerCharacter: record.opponentPartnerCharacter,
+  myRacket: record.myRacket,
+  myPartnerRacket: record.myPartnerRacket,
+  opponentRacket: record.opponentRacket,
+  opponentPartnerRacket: record.opponentPartnerRacket,
+  myRate: record.myRate,
+  myRateBand: record.myRateBand,
+  opponentRateBand: record.opponentRateBand,
+  opponentPlayerName: record.opponentPlayerName,
+  myPartnerPlayerName: record.myPartnerPlayerName,
+  opponentPartnerPlayerName: record.opponentPartnerPlayerName
+});
+
+const normalizeInlineEditValues = (values: MatchRecordValues): MatchRecordValues => {
+  const normalized: MatchRecordValues = {
+    ...values,
+    playedAt: values.playedAt.trim(),
+    stage: values.stage.trim(),
+    myCharacter: values.myCharacter.trim(),
+    myPartnerCharacter: values.myPartnerCharacter.trim(),
+    opponentCharacter: values.opponentCharacter.trim(),
+    opponentPartnerCharacter: values.opponentPartnerCharacter.trim(),
+    myRacket: values.myRacket.trim(),
+    myPartnerRacket: values.myPartnerRacket.trim(),
+    opponentRacket: values.opponentRacket.trim(),
+    opponentPartnerRacket: values.opponentPartnerRacket.trim(),
+    myRate: values.myRate.trim(),
+    myRateBand: values.myRateBand.trim(),
+    opponentRateBand: values.opponentRateBand.trim(),
+    opponentPlayerName: values.opponentPlayerName.trim(),
+    myPartnerPlayerName: values.myPartnerPlayerName.trim(),
+    opponentPartnerPlayerName: values.opponentPartnerPlayerName.trim()
+  };
+
+  if (normalized.playedAt.length === 0) {
+    throw new Error("試合日時を入力してください。");
+  }
+  if (normalized.stage.length === 0) {
+    throw new Error("ステージを入力してください。");
+  }
+  if (normalized.myCharacter.length === 0) {
+    throw new Error("自分キャラを入力してください。");
+  }
+  if (normalized.opponentCharacter.length === 0) {
+    throw new Error("相手キャラを入力してください。");
+  }
+  if (normalized.myRateBand.length === 0) {
+    throw new Error("自分レート帯を入力してください。");
+  }
+  if (normalized.opponentRateBand.length === 0) {
+    throw new Error("相手レート帯を入力してください。");
+  }
+  if (!/^\d+$/.test(normalized.myRate)) {
+    throw new Error("レートは0以上の整数で入力してください。");
+  }
+  normalized.myRate = String(Number.parseInt(normalized.myRate, 10));
+
+  const selectedRule = RULE_OPTIONS.find((option) => option.value === normalized.rule);
+  if (!selectedRule) {
+    throw new Error("ルールの値が不正です。");
+  }
+  if (!selectedRule.isDoubles) {
+    normalized.myPartnerCharacter = "";
+    normalized.opponentPartnerCharacter = "";
+    normalized.myPartnerRacket = "";
+    normalized.opponentPartnerRacket = "";
+    normalized.myPartnerPlayerName = "";
+    normalized.opponentPartnerPlayerName = "";
+  }
+  if (!selectedRule.hasFeverRacket) {
+    normalized.myRacket = "";
+    normalized.opponentRacket = "";
+    normalized.myPartnerRacket = "";
+    normalized.opponentPartnerRacket = "";
+  }
+
+  return normalized;
+};
+
 const resultChipColor = (value: string): "success" | "error" | "default" => {
   if (value === "WIN") {
     return "success";
@@ -158,6 +269,37 @@ const scoreCellTextSx = {
   fontVariantNumeric: "tabular-nums"
 } as const;
 
+const RULE_VALUE_OPTIONS = RULE_OPTIONS.map((option) => ({
+  value: option.value,
+  label: option.label
+}));
+const CHARACTER_VALUE_OPTIONS = CHARACTER_OPTIONS.map((option) => ({
+  value: option.value,
+  label: option.label
+}));
+const RACKET_VALUE_OPTIONS = RACKET_OPTIONS.map((option) => ({
+  value: option,
+  label: option
+}));
+const RATE_BAND_VALUE_OPTIONS = [...RATE_BAND_OPTIONS].reverse().map((option) => ({
+  value: option,
+  label: option
+}));
+const PARTNER_ONLY_FIELDS = new Set([
+  "myPartnerCharacter",
+  "opponentPartnerCharacter",
+  "myPartnerRacket",
+  "opponentPartnerRacket",
+  "myPartnerPlayerName",
+  "opponentPartnerPlayerName"
+]);
+const FEVER_RACKET_FIELDS = new Set([
+  "myRacket",
+  "opponentRacket",
+  "myPartnerRacket",
+  "opponentPartnerRacket"
+]);
+
 const RULE_TREND_COLORS: Record<MatchRecordValues["rule"], string> = {
   singles_fever_on: "#2e7d32",
   singles_fever_off: "#1565c0",
@@ -182,6 +324,7 @@ const VERSION_LABEL =
     : `v${DISPLAY_VERSION}`;
 
 function App() {
+  const gridApiRef = useGridApiRef();
   const [records, setRecords] = useState<MatchRecord[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRecordId, setEditingRecordId] = useState<number | null>(null);
@@ -306,10 +449,14 @@ function App() {
     setIsModalOpen(false);
   };
 
-  const handleSubmit = async (values: MatchRecordValues) => {
+  const handleSubmit = async (
+    values: MatchRecordValues,
+    options?: { keepOpenAfterSave?: boolean }
+  ) => {
     try {
       setIsSubmitting(true);
       setErrorMessage(null);
+      const shouldKeepOpenAfterSave = editingRecordId === null && options?.keepOpenAfterSave === true;
 
       if (editingRecordId === null) {
         const createdRecord = await createRecord(values);
@@ -321,7 +468,9 @@ function App() {
         );
       }
 
-      setIsModalOpen(false);
+      if (!shouldKeepOpenAfterSave) {
+        setIsModalOpen(false);
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "記録の保存に失敗しました。");
     } finally {
@@ -352,6 +501,47 @@ function App() {
 
   const handleRefreshClick = () => {
     void loadRecords("manual");
+  };
+
+  const handleInlineRowUpdate = async (newRow: MatchRecord) => {
+    setErrorMessage(null);
+    const values = normalizeInlineEditValues(toMatchRecordValues(newRow));
+    const updatedRecord = await updateRecord(newRow.id, values);
+    setRecords((prev) =>
+      prev.map((record) => (record.id === updatedRecord.id ? updatedRecord : record))
+    );
+    return updatedRecord;
+  };
+
+  const handleInlineRowUpdateError = (error: unknown) => {
+    setErrorMessage(error instanceof Error ? error.message : "記録の保存に失敗しました。");
+  };
+
+  const handleGridCellClick = (params: GridCellParams<MatchRecord>) => {
+    if (!params.isEditable || params.cellMode === "edit") {
+      return;
+    }
+    if (isLoading || isRefreshing || isSubmitting || deletingRecordId !== null) {
+      return;
+    }
+    gridApiRef.current?.startCellEditMode({ id: params.id, field: params.field });
+  };
+
+  const handleGridIsCellEditable = (params: GridCellParams<MatchRecord>) => {
+    const ruleOption = RULE_OPTIONS.find((option) => option.value === params.row.rule);
+    if (!ruleOption) {
+      return false;
+    }
+
+    if (PARTNER_ONLY_FIELDS.has(params.field) && !ruleOption.isDoubles) {
+      return false;
+    }
+
+    if (FEVER_RACKET_FIELDS.has(params.field) && !ruleOption.hasFeverRacket) {
+      return false;
+    }
+
+    return true;
   };
 
   const ruleLabelByValue = useMemo(
@@ -917,6 +1107,8 @@ function App() {
         width: 186,
         maxWidth: 190,
         flex: 0,
+        editable: true,
+        renderEditCell: DatetimeEditCell,
         renderCell: (params: GridRenderCellParams<MatchRecord, MatchRecord["playedAt"]>) =>
           formatPlayedAt(params.row.playedAt)
       },
@@ -925,10 +1117,21 @@ function App() {
         headerName: "ルール",
         minWidth: 220,
         flex: 1.2,
+        editable: true,
+        type: "singleSelect",
+        valueOptions: RULE_VALUE_OPTIONS,
         renderCell: (params: GridRenderCellParams<MatchRecord, MatchRecord["rule"]>) =>
           ruleLabelByValue[params.row.rule]
       },
-      { field: "stage", headerName: "ステージ", minWidth: 190, flex: 1.1 },
+      {
+        field: "stage",
+        headerName: "ステージ",
+        minWidth: 190,
+        flex: 1.1,
+        editable: true,
+        type: "singleSelect",
+        valueOptions: stageFilterOptions
+      },
       {
         field: "score",
         headerName: "スコア",
@@ -973,6 +1176,9 @@ function App() {
         headerName: "自分キャラ",
         minWidth: 150,
         flex: 0.9,
+        editable: true,
+        type: "singleSelect",
+        valueOptions: CHARACTER_VALUE_OPTIONS,
         renderCell: (params: GridRenderCellParams<MatchRecord, MatchRecord["myCharacter"]>) =>
           displayCharacter(params.row.myCharacter)
       },
@@ -981,6 +1187,9 @@ function App() {
         headerName: "自分パートナー",
         minWidth: 150,
         flex: 0.9,
+        editable: true,
+        type: "singleSelect",
+        valueOptions: CHARACTER_VALUE_OPTIONS,
         renderCell: (params: GridRenderCellParams<MatchRecord, MatchRecord["myPartnerCharacter"]>) =>
           displayCharacterOrDash(params.row.myPartnerCharacter)
       },
@@ -989,6 +1198,9 @@ function App() {
         headerName: "相手キャラ",
         minWidth: 150,
         flex: 0.9,
+        editable: true,
+        type: "singleSelect",
+        valueOptions: CHARACTER_VALUE_OPTIONS,
         renderCell: (params: GridRenderCellParams<MatchRecord, MatchRecord["opponentCharacter"]>) =>
           displayCharacter(params.row.opponentCharacter)
       },
@@ -997,6 +1209,9 @@ function App() {
         headerName: "相手パートナー",
         minWidth: 150,
         flex: 0.9,
+        editable: true,
+        type: "singleSelect",
+        valueOptions: CHARACTER_VALUE_OPTIONS,
         renderCell: (params: GridRenderCellParams<MatchRecord, MatchRecord["opponentPartnerCharacter"]>) =>
           displayCharacterOrDash(params.row.opponentPartnerCharacter)
       },
@@ -1005,6 +1220,9 @@ function App() {
         headerName: "自分ラケット",
         minWidth: 160,
         flex: 1,
+        editable: true,
+        type: "singleSelect",
+        valueOptions: RACKET_VALUE_OPTIONS,
         renderCell: (params: GridRenderCellParams<MatchRecord, MatchRecord["myRacket"]>) =>
           displayOrDash(params.row.myRacket)
       },
@@ -1013,6 +1231,9 @@ function App() {
         headerName: "自分パートナーラケット",
         minWidth: 190,
         flex: 1,
+        editable: true,
+        type: "singleSelect",
+        valueOptions: RACKET_VALUE_OPTIONS,
         renderCell: (params: GridRenderCellParams<MatchRecord, MatchRecord["myPartnerRacket"]>) =>
           displayOrDash(params.row.myPartnerRacket)
       },
@@ -1021,6 +1242,9 @@ function App() {
         headerName: "相手ラケット",
         minWidth: 160,
         flex: 1,
+        editable: true,
+        type: "singleSelect",
+        valueOptions: RACKET_VALUE_OPTIONS,
         renderCell: (params: GridRenderCellParams<MatchRecord, MatchRecord["opponentRacket"]>) =>
           displayOrDash(params.row.opponentRacket)
       },
@@ -1029,6 +1253,9 @@ function App() {
         headerName: "相手パートナーラケット",
         minWidth: 190,
         flex: 1,
+        editable: true,
+        type: "singleSelect",
+        valueOptions: RACKET_VALUE_OPTIONS,
         renderCell: (params: GridRenderCellParams<MatchRecord, MatchRecord["opponentPartnerRacket"]>) =>
           displayOrDash(params.row.opponentPartnerRacket)
       },
@@ -1039,6 +1266,7 @@ function App() {
         width: 118,
         maxWidth: 124,
         flex: 0,
+        editable: true,
         align: "center",
         headerAlign: "center",
         renderCell: (params: GridRenderCellParams<MatchRecord, MatchRecord["myRate"]>) => {
@@ -1063,6 +1291,9 @@ function App() {
         width: 96,
         maxWidth: 104,
         flex: 0,
+        editable: true,
+        type: "singleSelect",
+        valueOptions: RATE_BAND_VALUE_OPTIONS,
         align: "center",
         headerAlign: "center",
         renderHeader: () => (
@@ -1088,6 +1319,9 @@ function App() {
         width: 96,
         maxWidth: 104,
         flex: 0,
+        editable: true,
+        type: "singleSelect",
+        valueOptions: RATE_BAND_VALUE_OPTIONS,
         align: "center",
         headerAlign: "center",
         renderHeader: () => (
@@ -1113,6 +1347,7 @@ function App() {
         headerName: "相手プレイヤー名",
         minWidth: 170,
         flex: 0.9,
+        editable: true,
         renderCell: (params: GridRenderCellParams<MatchRecord, MatchRecord["opponentPlayerName"]>) =>
           displayOrDash(params.row.opponentPlayerName)
       },
@@ -1121,6 +1356,7 @@ function App() {
         headerName: "自分パートナー名",
         minWidth: 170,
         flex: 0.9,
+        editable: true,
         renderCell: (params: GridRenderCellParams<MatchRecord, MatchRecord["myPartnerPlayerName"]>) =>
           displayOrDash(params.row.myPartnerPlayerName)
       },
@@ -1129,6 +1365,7 @@ function App() {
         headerName: "相手パートナー名",
         minWidth: 170,
         flex: 0.9,
+        editable: true,
         renderCell: (params: GridRenderCellParams<MatchRecord, MatchRecord["opponentPartnerPlayerName"]>) =>
           displayOrDash(params.row.opponentPartnerPlayerName)
       },
@@ -1172,7 +1409,13 @@ function App() {
         )
       }
     ],
-    [characterLabelByValue, deletingRecordId, myRateDeltaByRecordId, ruleLabelByValue]
+    [
+      characterLabelByValue,
+      deletingRecordId,
+      myRateDeltaByRecordId,
+      ruleLabelByValue,
+      stageFilterOptions
+    ]
   );
 
   const defaultColumnOrder = useMemo(
@@ -1275,9 +1518,6 @@ function App() {
               </IconButton>
             </span>
           </Tooltip>
-          <button type="button" className="button primary" onClick={openCreateModal}>
-            記録を追加
-          </button>
         </div>
       </header>
 
@@ -1287,64 +1527,75 @@ function App() {
         <div className="dashboard-main">
           <section className="record-list">
             <div className="record-main">
-            <div className="record-list-header">
-              <h2>記録一覧</h2>
-              <button
-                type="button"
-                className="button secondary"
-                onClick={() => setIsColumnOrderEditorOpen((prev) => !prev)}
-              >
-                {isColumnOrderEditorOpen ? "列順編集を閉じる" : "列順編集"}
-              </button>
-            </div>
-
-            {isColumnOrderEditorOpen && (
-              <div className="column-order-editor">
-                <p>
-                  {visibleOrderedColumns.length <= 1
-                    ? "表示中の列が1つ以下のため並び替えできません。"
-                    : "表示中の列のみ上下ボタンで並び替えできます（変更内容は保存されます）。"}
-                </p>
-                {visibleOrderedColumns.length === 0 ? (
-                  <p className="column-order-empty">表示中の列がありません。</p>
-                ) : (
-                  <ul className="column-order-list">
-                    {visibleOrderedColumns.map((column, index) => (
-                      <li key={column.field} className="column-order-item">
-                        <div className="column-order-actions">
-                          <button
-                            type="button"
-                            className="button secondary column-order-button"
-                            onClick={() => moveVisibleColumnByDirection(column.field, "up")}
-                            disabled={index === 0}
-                          >
-                            ↑
-                          </button>
-                          <button
-                            type="button"
-                            className="button secondary column-order-button"
-                            onClick={() => moveVisibleColumnByDirection(column.field, "down")}
-                            disabled={index === visibleOrderedColumns.length - 1}
-                          >
-                            ↓
-                          </button>
-                        </div>
-                        <span>{String(column.headerName ?? column.field)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+              <div className="record-list-header">
+                <div className="record-list-title-group">
+                  <h2>記録一覧</h2>
+                  <button type="button" className="button primary" onClick={openCreateModal}>
+                    記録を追加
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={() => setIsColumnOrderEditorOpen((prev) => !prev)}
+                >
+                  {isColumnOrderEditorOpen ? "列順編集を閉じる" : "列順編集"}
+                </button>
               </div>
-            )}
+
+              {isColumnOrderEditorOpen && (
+                <div className="column-order-editor">
+                  <p>
+                    {visibleOrderedColumns.length <= 1
+                      ? "表示中の列が1つ以下のため並び替えできません。"
+                      : "表示中の列のみ上下ボタンで並び替えできます（変更内容は保存されます）。"}
+                  </p>
+                  {visibleOrderedColumns.length === 0 ? (
+                    <p className="column-order-empty">表示中の列がありません。</p>
+                  ) : (
+                    <ul className="column-order-list">
+                      {visibleOrderedColumns.map((column, index) => (
+                        <li key={column.field} className="column-order-item">
+                          <div className="column-order-actions">
+                            <button
+                              type="button"
+                              className="button secondary column-order-button"
+                              onClick={() => moveVisibleColumnByDirection(column.field, "up")}
+                              disabled={index === 0}
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              className="button secondary column-order-button"
+                              onClick={() => moveVisibleColumnByDirection(column.field, "down")}
+                              disabled={index === visibleOrderedColumns.length - 1}
+                            >
+                              ↓
+                            </button>
+                          </div>
+                          <span>{String(column.headerName ?? column.field)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
 
             <div className="record-grid-container">
               <DataGrid
+                apiRef={gridApiRef}
                 rows={filteredRecords}
                 columns={orderedColumns}
                 loading={isLoading}
                 showToolbar
+                editMode="cell"
                 columnVisibilityModel={columnVisibilityModel}
                 onColumnVisibilityModelChange={handleColumnVisibilityModelChange}
+                onCellClick={handleGridCellClick}
+                isCellEditable={handleGridIsCellEditable}
+                processRowUpdate={handleInlineRowUpdate}
+                onProcessRowUpdateError={handleInlineRowUpdateError}
                 disableRowSelectionOnClick
                 pageSizeOptions={[10, 20, 50]}
                 initialState={{

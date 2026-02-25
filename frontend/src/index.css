@@ -302,6 +302,12 @@ body {
   margin-bottom: 0.8rem;
 }
 
+.record-list-title-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
 .column-order-editor {
   border: 1px solid #d7e1e8;
   border-radius: 10px;
@@ -544,6 +550,10 @@ body {
   .record-list-header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .record-list-title-group {
+    justify-content: space-between;
   }
 
   .column-order-item {
