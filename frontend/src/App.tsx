@@ -1180,8 +1180,10 @@ function App() {
       {
         field: "rule",
         headerName: "ルール",
-        minWidth: 220,
-        flex: 1.2,
+        minWidth: 136,
+        width: 136,
+        maxWidth: 144,
+        flex: 0,
         editable: true,
         type: "singleSelect",
         valueOptions: RULE_VALUE_OPTIONS,

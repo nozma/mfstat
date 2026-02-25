@@ -8,25 +8,25 @@ export type RuleOption = {
 export const RULE_OPTIONS: RuleOption[] = [
   {
     value: "singles_fever_on",
-    label: "シングルス / フィーバーラケットあり",
+    label: "Singles / F+",
     isDoubles: false,
     hasFeverRacket: true
   },
   {
     value: "singles_fever_off",
-    label: "シングルス / フィーバーラケットなし",
+    label: "Singles / F-",
     isDoubles: false,
     hasFeverRacket: false
   },
   {
     value: "doubles_fever_on",
-    label: "ダブルス / フィーバーラケットあり",
+    label: "Doubles / F+",
     isDoubles: true,
     hasFeverRacket: true
   },
   {
     value: "doubles_fever_off",
-    label: "ダブルス / フィーバーラケットなし",
+    label: "Doubles / F-",
     isDoubles: true,
     hasFeverRacket: false
   }
