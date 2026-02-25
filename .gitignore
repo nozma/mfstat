@@ -5,7 +5,12 @@ frontend/dist
 # backend
 backend/.venv
 backend/mfstat.db
+backend/db_backups
 backend/.pytest_cache
+backend/.pyinstaller
+backend/build
+backend/dist
+backend/*.spec
 **/__pycache__/
 *.pyc
 

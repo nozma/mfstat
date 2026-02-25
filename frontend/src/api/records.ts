@@ -53,7 +53,14 @@ type MatchRecordPayload = {
   opponent_partner_player_name: string | null;
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const resolveDefaultApiBaseUrl = () => {
+  if (import.meta.env.DEV) {
+    return "http://127.0.0.1:8000";
+  }
+  return window.location.origin;
+};
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? resolveDefaultApiBaseUrl();
 
 const pad2 = (value: number) => value.toString().padStart(2, "0");
 
