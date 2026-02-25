@@ -497,7 +497,20 @@ function MatchRecordModal({
             background:
               "radial-gradient(circle at top right, rgba(221, 237, 251, 0.5) 0%, rgba(245, 249, 254, 1) 42%)",
             borderTopColor: "#d6e1eb",
-            borderBottomColor: "#d6e1eb"
+            borderBottomColor: "#d6e1eb",
+            "& .MuiInputBase-input, & .MuiSelect-select": {
+              fontSize: "0.9rem"
+            },
+            "& .MuiInputLabel-root": {
+              fontSize: "0.9rem"
+            },
+            "& .MuiTextField-root .MuiOutlinedInput-root": {
+              minHeight: "34px"
+            },
+            "& .MuiTextField-root .MuiOutlinedInput-input, & .MuiTextField-root .MuiSelect-select": {
+              paddingTop: "7px",
+              paddingBottom: "7px"
+            }
           }}
         >
           <Stack spacing={1}>
