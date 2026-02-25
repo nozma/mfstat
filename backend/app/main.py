@@ -28,6 +28,13 @@ def _resolve_cors_origins() -> list[str]:
     ]
 
 
+def _resolve_cors_origin_regex() -> str:
+    configured = os.getenv("MFSTAT_CORS_ORIGIN_REGEX")
+    if configured:
+        return configured
+    return r"^http://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$"
+
+
 def _resolve_frontend_dist_dir() -> Path | None:
     candidates: list[Path] = []
     bundled_base_dir = getattr(sys, "_MEIPASS", None)
@@ -46,6 +53,7 @@ FRONTEND_DIST_DIR = _resolve_frontend_dist_dir()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_resolve_cors_origins(),
+    allow_origin_regex=_resolve_cors_origin_regex(),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"]
