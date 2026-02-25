@@ -1,9 +1,11 @@
 import os
 import sys
+import logging
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
@@ -12,6 +14,7 @@ from .database import get_session, init_db
 from .models import MatchRecord, MatchRecordCreate, MatchRecordRead, MatchRecordUpdate
 
 app = FastAPI(title="MFStat API")
+logger = logging.getLogger("mfstat.api")
 
 
 def _resolve_cors_origins() -> list[str]:
@@ -61,6 +64,12 @@ app.add_middleware(
 
 if FRONTEND_DIST_DIR and (FRONTEND_DIST_DIR / "assets").is_dir():
     app.mount("/assets", StaticFiles(directory=FRONTEND_DIST_DIR / "assets"), name="frontend-assets")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
 
 
 def compute_result(my_score: int, opponent_score: int) -> str:

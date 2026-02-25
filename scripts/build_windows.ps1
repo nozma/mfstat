@@ -32,6 +32,7 @@ $env:PYINSTALLER_CONFIG_DIR = Join-Path $BackendDir ".pyinstaller"
 Push-Location $BackendDir
 try {
   & $PyInstallerExe `
+    --clean `
     --noconfirm `
     --windowed `
     --name $AppName `

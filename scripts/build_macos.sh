@@ -42,6 +42,7 @@ export PYINSTALLER_CONFIG_DIR="${BACKEND_DIR}/.pyinstaller"
 (
   cd "${BACKEND_DIR}"
   "${PYINSTALLER_BIN}" \
+    --clean \
     --noconfirm \
     --windowed \
     --name "${APP_NAME}" \
