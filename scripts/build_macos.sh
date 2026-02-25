@@ -5,6 +5,16 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 APP_NAME="${APP_NAME:-MFStat}"
 HOST_ARCH="$(uname -m)"
 
+if [[ -z "${MFSTAT_APP_VERSION:-}" ]]; then
+  TAG_AT_HEAD="$(git -C "${ROOT_DIR}" tag --points-at HEAD | head -n 1 || true)"
+  if [[ -n "${TAG_AT_HEAD}" ]]; then
+    export MFSTAT_APP_VERSION="${TAG_AT_HEAD}"
+  else
+    SHORT_SHA="$(git -C "${ROOT_DIR}" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+    export MFSTAT_APP_VERSION="dev-${SHORT_SHA}"
+  fi
+fi
+
 if [[ "${HOST_ARCH}" != "arm64" && "${HOST_ARCH}" != "x86_64" ]]; then
   echo "Unsupported macOS architecture: ${HOST_ARCH}" >&2
   exit 1
@@ -33,6 +43,7 @@ fi
 
 (
   cd "${FRONTEND_DIR}"
+  echo "Building frontend with version: ${MFSTAT_APP_VERSION}"
   npm run build
 )
 

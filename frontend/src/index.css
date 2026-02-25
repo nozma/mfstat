@@ -28,8 +28,51 @@ body {
   margin-bottom: 1.5rem;
 }
 
+.page-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
 .page-header h1 {
   margin: 0;
+}
+
+.app-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.app-version {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #8193a0;
+  letter-spacing: 0.02em;
+}
+
+.refresh-button {
+  border: 1px solid #c8d4dd !important;
+  background-color: #f8fbfd !important;
+  color: #466375 !important;
+}
+
+.refresh-button:hover {
+  background-color: #eef4f8 !important;
+}
+
+.refresh-button.is-spinning svg {
+  animation: refresh-spin 0.95s linear infinite;
+}
+
+@keyframes refresh-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .record-list {

@@ -11,6 +11,16 @@ $PythonExe = Join-Path $BackendDir ".venv\Scripts\python.exe"
 $PipExe = Join-Path $BackendDir ".venv\Scripts\pip.exe"
 $PyInstallerExe = Join-Path $BackendDir ".venv\Scripts\pyinstaller.exe"
 
+if ([string]::IsNullOrWhiteSpace($env:MFSTAT_APP_VERSION)) {
+  $TagAtHead = (git -C $RootDir tag --points-at HEAD | Select-Object -First 1)
+  if (-not [string]::IsNullOrWhiteSpace($TagAtHead)) {
+    $env:MFSTAT_APP_VERSION = $TagAtHead.Trim()
+  } else {
+    $ShortSha = (git -C $RootDir rev-parse --short HEAD).Trim()
+    $env:MFSTAT_APP_VERSION = "dev-$ShortSha"
+  }
+}
+
 if (-not (Test-Path $PythonExe)) {
   throw "Python venv not found: $PythonExe"
 }
@@ -21,6 +31,7 @@ if (-not (Test-Path $PyInstallerExe)) {
 
 Push-Location $FrontendDir
 try {
+  Write-Host "Building frontend with version: $env:MFSTAT_APP_VERSION"
   npm run build
 }
 finally {

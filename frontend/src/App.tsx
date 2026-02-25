@@ -18,6 +18,7 @@ import {
 } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import {
   DataGrid,
   GridColDef,
@@ -172,11 +173,14 @@ const formatTrendDate = (timestamp: number) => {
   return `${date.getMonth() + 1}/${date.getDate()}`;
 };
 
+const APP_VERSION = __APP_VERSION__;
+
 function App() {
   const [records, setRecords] = useState<MatchRecord[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRecordId, setEditingRecordId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingRecordId, setDeletingRecordId] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -253,21 +257,23 @@ function App() {
     };
   }, [latestRecord]);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setIsLoading(true);
-        setErrorMessage(null);
-        const fetchedRecords = await listRecords();
-        setRecords(fetchedRecords);
-      } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : "記録の取得に失敗しました。");
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const loadRecords = async (mode: "initial" | "manual" = "initial") => {
+    const setLoadingState = mode === "initial" ? setIsLoading : setIsRefreshing;
 
-    void load();
+    try {
+      setLoadingState(true);
+      setErrorMessage(null);
+      const fetchedRecords = await listRecords();
+      setRecords(fetchedRecords);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "記録の取得に失敗しました。");
+    } finally {
+      setLoadingState(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadRecords("initial");
   }, []);
 
   useEffect(() => {
@@ -336,6 +342,10 @@ function App() {
     } finally {
       setDeletingRecordId(null);
     }
+  };
+
+  const handleRefreshClick = () => {
+    void loadRecords("manual");
   };
 
   const ruleLabelByValue = useMemo(
@@ -1241,10 +1251,28 @@ function App() {
   return (
     <main className="app">
       <header className="page-header">
-        <h1>MFStat</h1>
-        <button type="button" className="button primary" onClick={openCreateModal}>
-          記録を追加
-        </button>
+        <h1 className="app-title">
+          MFStat
+          <span className="app-version">v{APP_VERSION}</span>
+        </h1>
+        <div className="page-header-actions">
+          <Tooltip title="表示を更新" arrow>
+            <span>
+              <IconButton
+                size="small"
+                className={`refresh-button${isRefreshing ? " is-spinning" : ""}`}
+                onClick={handleRefreshClick}
+                disabled={isLoading || isRefreshing || isSubmitting}
+                aria-label="表示を更新"
+              >
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <button type="button" className="button primary" onClick={openCreateModal}>
+            記録を追加
+          </button>
+        </div>
       </header>
 
       {errorMessage && <p className="status-message error">{errorMessage}</p>}

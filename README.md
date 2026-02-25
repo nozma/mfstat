@@ -77,6 +77,9 @@ PowerShellで実行:
 - Intel Mac向けはIntel Mac上で `make build-macos` を実行してください。
 - Windows向けはWindows環境上で `build_windows.ps1` を実行してください。
 - 配布前に各OSで起動確認してください。
+- 画面のバージョン表示は `MFSTAT_APP_VERSION` を使用します。
+  - タグ付きコミットでビルドした場合: タグ名（例: `v1.0.1`）
+  - タグなしコミットでビルドした場合: `dev-<shortsha>`
 
 ## Current UI Scope
 - 記録登録モーダル（新規登録）
