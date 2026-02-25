@@ -56,7 +56,10 @@ type MatchRecordModalProps = {
   historyRecords?: MatchRecordValues[];
   isSubmitting?: boolean;
   onClose: () => void;
-  onSubmit: (values: MatchRecordValues) => void | Promise<void>;
+  onSubmit: (
+    values: MatchRecordValues,
+    options?: { keepOpenAfterSave?: boolean }
+  ) => void | Promise<void>;
 };
 
 const defaultValues: MatchRecordValues = {
@@ -363,12 +366,7 @@ function MatchRecordModal({
 
   const modalTitle = mode === "create" ? "記録を登録" : "記録を編集";
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (isSubmitting) {
-      return;
-    }
-
+  const buildNormalizedValues = (): MatchRecordValues => {
     const normalizedValues: MatchRecordValues = { ...values };
 
     if (!isDoubles) {
@@ -387,7 +385,22 @@ function MatchRecordModal({
       normalizedValues.opponentPartnerRacket = "";
     }
 
-    onSubmit(normalizedValues);
+    return normalizedValues;
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isSubmitting) {
+      return;
+    }
+    void onSubmit(buildNormalizedValues());
+  };
+
+  const handleSaveAndContinue = () => {
+    if (isSubmitting || mode !== "create") {
+      return;
+    }
+    void onSubmit(buildNormalizedValues(), { keepOpenAfterSave: true });
   };
 
   return (
@@ -1014,6 +1027,16 @@ function MatchRecordModal({
           <Button variant="outlined" color="inherit" onClick={onClose} disabled={isSubmitting}>
             キャンセル
           </Button>
+          {mode === "create" && (
+            <Button
+              type="button"
+              variant="outlined"
+              onClick={handleSaveAndContinue}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "保存中..." : "保存して続ける"}
+            </Button>
+          )}
           <Button type="submit" variant="contained" disabled={isSubmitting}>
             {isSubmitting ? "保存中..." : "保存"}
           </Button>
