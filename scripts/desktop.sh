@@ -13,6 +13,7 @@ if [[ -z "${MFSTAT_APP_VERSION:-}" ]]; then
     export MFSTAT_APP_VERSION="dev-${SHORT_SHA}"
   fi
 fi
+export VITE_APP_VERSION="${MFSTAT_APP_VERSION}"
 
 BACKEND_PYTHON="python3"
 if [[ -x "${BACKEND_DIR}/.venv/bin/python" ]]; then
@@ -21,7 +22,7 @@ fi
 
 (
   cd "${FRONTEND_DIR}"
-  echo "Building frontend with version: ${MFSTAT_APP_VERSION}"
+  echo "Building frontend with version: ${VITE_APP_VERSION}"
   npm run build
 )
 

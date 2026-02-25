@@ -20,6 +20,7 @@ if ([string]::IsNullOrWhiteSpace($env:MFSTAT_APP_VERSION)) {
     $env:MFSTAT_APP_VERSION = "dev-$ShortSha"
   }
 }
+$env:VITE_APP_VERSION = $env:MFSTAT_APP_VERSION
 
 if (-not (Test-Path $PythonExe)) {
   throw "Python venv not found: $PythonExe"
@@ -31,7 +32,7 @@ if (-not (Test-Path $PyInstallerExe)) {
 
 Push-Location $FrontendDir
 try {
-  Write-Host "Building frontend with version: $env:MFSTAT_APP_VERSION"
+  Write-Host "Building frontend with version: $env:VITE_APP_VERSION"
   npm run build
 }
 finally {

@@ -14,6 +14,7 @@ if [[ -z "${MFSTAT_APP_VERSION:-}" ]]; then
     export MFSTAT_APP_VERSION="dev-${SHORT_SHA}"
   fi
 fi
+export VITE_APP_VERSION="${MFSTAT_APP_VERSION}"
 
 if [[ "${HOST_ARCH}" != "arm64" && "${HOST_ARCH}" != "x86_64" ]]; then
   echo "Unsupported macOS architecture: ${HOST_ARCH}" >&2
@@ -43,7 +44,7 @@ fi
 
 (
   cd "${FRONTEND_DIR}"
-  echo "Building frontend with version: ${MFSTAT_APP_VERSION}"
+  echo "Building frontend with version: ${VITE_APP_VERSION}"
   npm run build
 )
 

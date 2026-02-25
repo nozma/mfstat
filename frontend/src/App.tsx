@@ -174,6 +174,12 @@ const formatTrendDate = (timestamp: number) => {
 };
 
 const APP_VERSION = __APP_VERSION__;
+const APP_VERSION_FROM_ENV = import.meta.env.VITE_APP_VERSION;
+const DISPLAY_VERSION = APP_VERSION_FROM_ENV || APP_VERSION;
+const VERSION_LABEL =
+  DISPLAY_VERSION.startsWith("v") || DISPLAY_VERSION.startsWith("dev-")
+    ? DISPLAY_VERSION
+    : `v${DISPLAY_VERSION}`;
 
 function App() {
   const [records, setRecords] = useState<MatchRecord[]>([]);
@@ -1253,7 +1259,7 @@ function App() {
       <header className="page-header">
         <h1 className="app-title">
           MFStat
-          <span className="app-version">v{APP_VERSION}</span>
+          <span className="app-version">{VERSION_LABEL}</span>
         </h1>
         <div className="page-header-actions">
           <Tooltip title="表示を更新" arrow>

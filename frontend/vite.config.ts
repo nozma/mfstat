@@ -6,7 +6,10 @@ const runtimeProcess = (globalThis as {
 }).process;
 
 const appVersion =
-  runtimeProcess?.env?.MFSTAT_APP_VERSION ?? runtimeProcess?.env?.npm_package_version ?? "0.1.0";
+  runtimeProcess?.env?.VITE_APP_VERSION ??
+  runtimeProcess?.env?.MFSTAT_APP_VERSION ??
+  runtimeProcess?.env?.npm_package_version ??
+  "0.1.0";
 
 export default defineConfig({
   plugins: [react()],

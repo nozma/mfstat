@@ -8,8 +8,8 @@ class MatchRecordBase(SQLModel):
     played_at: datetime
     rule: str = Field(min_length=1, max_length=64)
     stage: str = Field(min_length=1, max_length=200)
-    my_score: int = Field(ge=0, le=7)
-    opponent_score: int = Field(ge=0, le=7)
+    my_score: int = Field(ge=0, le=8)
+    opponent_score: int = Field(ge=0, le=8)
     my_character: str = Field(min_length=1, max_length=100)
     my_partner_character: Optional[str] = Field(default=None, max_length=100)
     opponent_character: str = Field(min_length=1, max_length=100)
@@ -40,8 +40,8 @@ class MatchRecordUpdate(SQLModel):
     played_at: Optional[datetime] = None
     rule: Optional[str] = Field(default=None, min_length=1, max_length=64)
     stage: Optional[str] = Field(default=None, min_length=1, max_length=200)
-    my_score: Optional[int] = Field(default=None, ge=0, le=7)
-    opponent_score: Optional[int] = Field(default=None, ge=0, le=7)
+    my_score: Optional[int] = Field(default=None, ge=0, le=8)
+    opponent_score: Optional[int] = Field(default=None, ge=0, le=8)
     my_character: Optional[str] = Field(default=None, min_length=1, max_length=100)
     my_partner_character: Optional[str] = Field(default=None, max_length=100)
     opponent_character: Optional[str] = Field(default=None, min_length=1, max_length=100)
