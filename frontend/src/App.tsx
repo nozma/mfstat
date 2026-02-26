@@ -31,6 +31,8 @@ import {
 import MatchRecordModal, {
   MatchRecordValues
 } from "./components/MatchRecordModal";
+import RateTrendStockChart, { DailyRateCandle } from "./components/RateTrendStockChart";
+import RateTrendViewSwitcher, { RateTrendViewMode } from "./components/RateTrendViewSwitcher";
 import {
   MatchRecord,
   createRecord,
@@ -48,6 +50,8 @@ import {
 
 const COLUMN_VISIBILITY_STORAGE_KEY = "mfstat.recordGrid.columnVisibility";
 const COLUMN_ORDER_STORAGE_KEY = "mfstat.recordGrid.columnOrder";
+const RATE_TREND_VIEW_MODE_STORAGE_KEY = "mfstat.rateTrend.viewMode";
+const RATE_TREND_RULE_STORAGE_KEY = "mfstat.rateTrend.rule";
 type DateFilterPreset = "all" | "last7" | "last30" | "custom";
 type FilterFieldKey =
   | "rule"
@@ -312,7 +316,15 @@ const formatTrendDate = (timestamp: number) => {
   if (Number.isNaN(date.getTime())) {
     return "-";
   }
-  return `${date.getMonth() + 1}/${date.getDate()}`;
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+};
+
+const toDateKey = (timestamp: number) => {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 };
 
 const APP_VERSION = __APP_VERSION__;
@@ -363,6 +375,28 @@ function App() {
   const [selectedOpponentRackets, setSelectedOpponentRackets] = useState<string[]>([]);
   const [selectedOpponentRateBands, setSelectedOpponentRateBands] = useState<string[]>([]);
   const [dateFilterPreset, setDateFilterPreset] = useState<DateFilterPreset>("all");
+  const [rateTrendViewMode, setRateTrendViewMode] = useState<RateTrendViewMode>(() => {
+    if (typeof window === "undefined") {
+      return "line";
+    }
+
+    const saved = window.localStorage.getItem(RATE_TREND_VIEW_MODE_STORAGE_KEY);
+    if (saved === "line" || saved === "candlestick") {
+      return saved;
+    }
+    return "line";
+  });
+  const [selectedTrendRule, setSelectedTrendRule] = useState<MatchRecordValues["rule"]>(() => {
+    if (typeof window === "undefined") {
+      return RULE_OPTIONS[0].value;
+    }
+
+    const saved = window.localStorage.getItem(RATE_TREND_RULE_STORAGE_KEY);
+    if (saved && RULE_OPTIONS.some((option) => option.value === saved)) {
+      return saved as MatchRecordValues["rule"];
+    }
+    return RULE_OPTIONS[0].value;
+  });
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [columnVisibilityModel, setColumnVisibilityModel] = useState<GridColumnVisibilityModel>(() => {
@@ -493,6 +527,14 @@ function App() {
       JSON.stringify(columnVisibilityModel)
     );
   }, [columnVisibilityModel]);
+
+  useEffect(() => {
+    window.localStorage.setItem(RATE_TREND_VIEW_MODE_STORAGE_KEY, rateTrendViewMode);
+  }, [rateTrendViewMode]);
+
+  useEffect(() => {
+    window.localStorage.setItem(RATE_TREND_RULE_STORAGE_KEY, selectedTrendRule);
+  }, [selectedTrendRule]);
 
   const openCreateModal = () => {
     setEditingRecordId(null);
@@ -1101,6 +1143,66 @@ function App() {
 
     return { width, height, margin, plotHeight, series, yTicks, xTicks };
   }, [filteredRecords]);
+  const dailyRateCandles = useMemo<DailyRateCandle[]>(() => {
+    const samples = filteredRecords
+      .filter((record) => record.rule === selectedTrendRule)
+      .map((record) => ({
+        id: record.id,
+        timestamp: parsePlayedAtTimestamp(record.playedAt),
+        rate: Number(record.myRate)
+      }))
+      .filter((sample) => sample.timestamp > 0 && !Number.isNaN(sample.rate))
+      .sort((left, right) => {
+        const timestampDiff = left.timestamp - right.timestamp;
+        if (timestampDiff !== 0) {
+          return timestampDiff;
+        }
+        return left.id - right.id;
+      });
+
+    const grouped = new Map<
+      string,
+      DailyRateCandle & { firstTimestamp: number; lastTimestamp: number }
+    >();
+
+    samples.forEach((sample) => {
+      const dateKey = toDateKey(sample.timestamp);
+      if (dateKey.length === 0) {
+        return;
+      }
+
+      const current = grouped.get(dateKey);
+      if (!current) {
+        grouped.set(dateKey, {
+          date: dateKey,
+          open: sample.rate,
+          high: sample.rate,
+          low: sample.rate,
+          close: sample.rate,
+          matches: 1,
+          firstTimestamp: sample.timestamp,
+          lastTimestamp: sample.timestamp
+        });
+        return;
+      }
+
+      current.high = Math.max(current.high, sample.rate);
+      current.low = Math.min(current.low, sample.rate);
+      current.matches += 1;
+      if (sample.timestamp < current.firstTimestamp) {
+        current.firstTimestamp = sample.timestamp;
+        current.open = sample.rate;
+      }
+      if (sample.timestamp >= current.lastTimestamp) {
+        current.lastTimestamp = sample.timestamp;
+        current.close = sample.rate;
+      }
+    });
+
+    return Array.from(grouped.values())
+      .sort((left, right) => left.firstTimestamp - right.firstTimestamp)
+      .map(({ firstTimestamp, lastTimestamp, ...candle }) => candle);
+  }, [filteredRecords, selectedTrendRule]);
   const resetFilters = () => {
     setSelectedRules([]);
     setSelectedStages([]);
@@ -1787,8 +1889,46 @@ function App() {
             </div>
 
             <div className="summary-card summary-trend-card">
-              <p className="summary-label">レート推移</p>
-              {rateTrendChart.series.length === 0 ? (
+              <div className="summary-trend-header">
+                <p className="summary-label">レート推移</p>
+                <div className="summary-trend-header-controls">
+                  {rateTrendViewMode === "candlestick" && (
+                    <FormControl size="small" className="rate-trend-rule-select">
+                      <InputLabel id="trend-rule-select-label">集計ルール</InputLabel>
+                      <Select<MatchRecordValues["rule"]>
+                        labelId="trend-rule-select-label"
+                        value={selectedTrendRule}
+                        label="集計ルール"
+                        onChange={(event) =>
+                          setSelectedTrendRule(event.target.value as MatchRecordValues["rule"])
+                        }
+                      >
+                        {RULE_OPTIONS.map((rule) => (
+                          <MenuItem key={`trend-rule-${rule.value}`} value={rule.value}>
+                            {rule.label}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
+                  <RateTrendViewSwitcher
+                    value={rateTrendViewMode}
+                    onChange={setRateTrendViewMode}
+                  />
+                </div>
+              </div>
+              {rateTrendViewMode === "candlestick" ? (
+                dailyRateCandles.length === 0 ? (
+                  <p className="summary-sub rate-trend-placeholder">
+                    選択したルールの対象レコードなし
+                  </p>
+                ) : (
+                  <RateTrendStockChart
+                    candles={dailyRateCandles}
+                    ruleLabel={ruleLabelByValue[selectedTrendRule]}
+                  />
+                )
+              ) : rateTrendChart.series.length === 0 ? (
                 <p className="summary-sub">対象レコードなし</p>
               ) : (
                 <>

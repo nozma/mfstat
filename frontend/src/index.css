@@ -148,6 +148,59 @@ body {
   margin-top: 0.8rem;
 }
 
+.summary-trend-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.summary-trend-header-controls {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.rate-trend-switcher {
+  min-width: 172px;
+}
+
+.rate-trend-rule-select {
+  min-width: 220px;
+}
+
+.rate-trend-placeholder {
+  margin-top: 0.6rem;
+}
+
+.rate-stock-chart-wrap {
+  margin-top: 0.55rem;
+}
+
+.rate-stock-chart {
+  width: 100%;
+  height: 420px;
+  border: 1px solid #d7e2ea;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0.2rem;
+  overflow: hidden;
+}
+
+.rate-stock-license {
+  margin: 0.45rem 0 0;
+  color: #5a6f7e;
+  font-size: 0.75rem;
+  text-align: right;
+}
+
+.rate-stock-license a {
+  color: #295b80;
+}
+
 .rate-band-chart {
   margin-top: 0.55rem;
   display: grid;
@@ -565,6 +618,19 @@ body {
 
   .record-grid-container {
     height: 480px;
+  }
+
+  .rate-trend-switcher,
+  .rate-trend-rule-select {
+    width: 100%;
+  }
+
+  .summary-trend-header-controls {
+    width: 100%;
+  }
+
+  .rate-stock-chart {
+    min-height: 360px;
   }
 
   .grid-two,

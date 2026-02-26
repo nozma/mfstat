@@ -40,3 +40,7 @@ make desktop
 - macOS: `~/Library/Application Support/mfstat/mfstat.db`
 - Windows: `%APPDATA%/mfstat/mfstat.db`
 - Linux: `$XDG_DATA_HOME/mfstat/mfstat.db`（未設定時: `~/.local/share/mfstat/mfstat.db`）
+
+## サードパーティライセンス
+- Plotly.js（`plotly.js-dist-min`）: MIT License
+- 詳細: `frontend/THIRD_PARTY_LICENSES.md`
