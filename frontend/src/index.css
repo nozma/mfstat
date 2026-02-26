@@ -102,7 +102,45 @@ body {
 }
 
 .summary-section h2 {
-  margin: 0 0 0.8rem;
+  margin: 0;
+}
+
+.summary-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.summary-view-switcher {
+  display: inline-flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.summary-view-button {
+  border: 1px solid #c8d4dd;
+  border-radius: 8px;
+  background: #f8fbfd;
+  color: #466375;
+  padding: 0.34rem 0.62rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.summary-view-button:hover {
+  background: #eef4f8;
+}
+
+.summary-view-button.is-active {
+  border-color: #2e6d9e;
+  background: #2e6d9e;
+  color: #fff;
 }
 
 .summary-card {
@@ -132,20 +170,77 @@ body {
   font-size: 0.84rem;
 }
 
-.summary-split-grid {
+.summary-subsection {
+  margin-top: 0.9rem;
+}
+
+.summary-subsection:first-of-type {
+  margin-top: 0;
+}
+
+.summary-rate-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 0.8rem;
+}
+
+.summary-rate-overview-card {
+  padding: 0.65rem 0.75rem;
+}
+
+.summary-rate-overview-rule {
+  margin: 0 0 0.4rem;
+  color: #324957;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.summary-rate-overview-rule-line {
+  display: block;
+  line-height: 1.25;
+}
+
+.summary-rate-overview-line {
+  margin: 0.12rem 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  color: #4e6372;
+  font-size: 0.74rem;
+}
+
+.summary-rate-overview-line strong {
+  color: #214d6c;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family:
+    "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "Liberation Mono",
+    "Courier New", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-win-grid {
   display: grid;
   grid-template-columns: minmax(0, 3fr) minmax(0, 4fr) minmax(0, 4fr);
   gap: 0.8rem;
 }
 
-.summary-left-stack {
+.summary-win-left-stack {
   display: grid;
   gap: 0.8rem;
   align-content: start;
 }
 
+.summary-usage-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.8rem;
+}
+
 .summary-trend-card {
-  margin-top: 0.8rem;
+  margin-top: 0;
 }
 
 .summary-trend-header {
@@ -209,17 +304,25 @@ body {
 
 .rate-band-row {
   display: grid;
-  grid-template-columns: 2.3rem 4.4rem minmax(0, 1fr) max-content;
+  grid-template-columns: 1.8rem 3.2rem minmax(0, 1fr) max-content;
   gap: 0.45rem;
   align-items: center;
 }
 
 .rate-band-row-character {
-  grid-template-columns: minmax(6rem, max-content) 4.4rem minmax(0, 1fr) max-content;
+  grid-template-columns: 5.9rem 3.2rem minmax(0, 1fr) max-content;
 }
 
 .rate-band-row-usage {
-  grid-template-columns: minmax(6rem, max-content) 4.4rem minmax(0, 1fr) max-content;
+  grid-template-columns: 5.9rem 3.2rem minmax(0, 1fr) max-content;
+}
+
+.rate-band-row-overlay {
+  grid-template-columns: 1.8rem 3.2rem minmax(0, 1fr);
+}
+
+.rate-band-row-overlay.rate-band-row-character {
+  grid-template-columns: 5.9rem 3.2rem minmax(0, 1fr);
 }
 
 .rate-band-label {
@@ -232,14 +335,18 @@ body {
 .rate-band-label-character {
   text-align: left;
   font-size: 0.73rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .rate-band-track {
   width: 100%;
-  height: 12px;
+  height: 14px;
   border-radius: 999px;
   background: #e2ebf2;
   overflow: hidden;
+  position: relative;
 }
 
 .rate-band-fill {
@@ -249,10 +356,11 @@ body {
 }
 
 .rate-band-value {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 400;
   color: #244d69;
   text-align: right;
+  line-height: 1;
   font-family:
     "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "Liberation Mono",
     "Courier New", monospace;
@@ -267,6 +375,25 @@ body {
     "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "Liberation Mono",
     "Courier New", monospace;
   font-variant-numeric: tabular-nums;
+}
+
+.rate-band-row-overlay .rate-band-meta {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  margin: 0;
+  text-align: center;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #f6fbff;
+  text-shadow: 0 0 2px rgba(14, 43, 68, 0.95), 0 0 1px rgba(14, 43, 68, 0.85);
+  line-height: 1;
+  white-space: nowrap;
+  max-width: calc(100% - 0.3rem);
+  overflow: hidden;
 }
 
 .rate-trend-legend {
@@ -598,7 +725,9 @@ body {
     overflow: visible;
   }
 
-  .summary-split-grid {
+  .summary-win-grid,
+  .summary-rate-overview-grid,
+  .summary-usage-grid {
     grid-template-columns: 1fr;
   }
 

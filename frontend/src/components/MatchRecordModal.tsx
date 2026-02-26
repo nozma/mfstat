@@ -2,27 +2,28 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
+  Checkbox,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   MenuItem,
   Stack,
   TextField,
   Typography
 } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
-import RemoveIcon from "@mui/icons-material/Remove";
+import SettingsIcon from "@mui/icons-material/Settings";
 import {
   CHARACTER_OPTIONS,
   RATE_BAND_OPTIONS,
   RACKET_OPTIONS,
   RULE_OPTIONS,
   RuleOption,
-  SCORE_OPTIONS,
   STAGE_OPTIONS
 } from "../constants/options";
 
@@ -42,7 +43,9 @@ export type MatchRecordValues = {
   opponentPartnerRacket: string;
   myRate: string;
   myRateBand: string;
+  myPartnerRateBand: string;
   opponentRateBand: string;
+  opponentPartnerRateBand: string;
   opponentPlayerName: string;
   myPartnerPlayerName: string;
   opponentPartnerPlayerName: string;
@@ -62,12 +65,14 @@ type MatchRecordModalProps = {
   ) => void | Promise<void>;
 };
 
+const PLAYER_NAME_RECORDING_STORAGE_KEY = "mfstat.modal.playerNameRecording";
+
 const defaultValues: MatchRecordValues = {
   playedAt: "",
   rule: RULE_OPTIONS[0].value,
   stage: STAGE_OPTIONS[0],
-  myScore: "3",
-  opponentScore: "3",
+  myScore: "",
+  opponentScore: "",
   myCharacter: CHARACTER_OPTIONS[0].value,
   myPartnerCharacter: CHARACTER_OPTIONS[0].value,
   opponentCharacter: CHARACTER_OPTIONS[0].value,
@@ -78,7 +83,9 @@ const defaultValues: MatchRecordValues = {
   opponentPartnerRacket: RACKET_OPTIONS[1],
   myRate: "",
   myRateBand: RATE_BAND_OPTIONS[0],
+  myPartnerRateBand: RATE_BAND_OPTIONS[0],
   opponentRateBand: RATE_BAND_OPTIONS[0],
+  opponentPartnerRateBand: RATE_BAND_OPTIONS[0],
   opponentPlayerName: "",
   myPartnerPlayerName: "",
   opponentPartnerPlayerName: ""
@@ -190,19 +197,16 @@ const shiftRateBand = (current: string, direction: -1 | 1) => {
   return RATE_BAND_OPTIONS[nextIndex];
 };
 
-const shiftScore = (current: string, direction: -1 | 1) => {
-  const currentIndex = SCORE_OPTIONS.indexOf(current);
-  const safeIndex = currentIndex === -1 ? 3 : currentIndex;
-  const nextIndex = Math.min(SCORE_OPTIONS.length - 1, Math.max(0, safeIndex + direction));
-  return SCORE_OPTIONS[nextIndex];
-};
-
 const shiftRateValue = (current: string, amount: number) => {
   const parsed = Number.parseInt(current, 10);
   const base = Number.isNaN(parsed) ? 0 : parsed;
   const next = Math.max(0, base + amount);
   return String(next);
 };
+
+const SCORE_SELECTION_OPTIONS = ["0", "1", "2", "3", "4", "5", "6"] as const;
+
+const toWinningScore = (selectedScore: string) => (selectedScore === "6" ? "8" : "7");
 
 const sectionSx = {
   px: 2,
@@ -248,7 +252,6 @@ const fieldWidthSx = {
     minWidth: { xs: "100%", sm: 170 },
     flex: { xs: "0 0 100%", sm: "1 1 auto" }
   },
-  score: { width: { xs: "100%", sm: 120 } },
   character: { width: { xs: "100%", sm: 220 } },
   racket: { width: { xs: "100%", sm: 220 } },
   rate: { width: { xs: "100%", sm: 72 } },
@@ -287,10 +290,99 @@ const rateBandButtonsSx = {
   gap: 0.25
 } as const;
 
-const scoreControlSx = {
+const opponentRateBandSelectorSx = {
+  width: "100%"
+} as const;
+
+const rateBandFieldLabelSx = {
+  mb: 0.45,
+  fontSize: "0.74rem",
+  fontWeight: 500,
+  color: "#28455a"
+} as const;
+
+const opponentRateBandButtonRowSx = {
   display: "flex",
   alignItems: "center",
-  gap: 0.5
+  gap: 0.45,
+  flexWrap: "nowrap",
+  overflowX: "auto",
+  pb: 0.25
+} as const;
+
+const opponentRateBandButtonSx = {
+  minWidth: 34,
+  height: 30,
+  px: 0.65,
+  fontWeight: 700,
+  fontSize: "0.78rem",
+  borderRadius: 1.4,
+  flex: "0 0 auto"
+} as const;
+
+const scoreSelectorSx = {
+  gridColumn: "1 / -1",
+  width: "100%"
+} as const;
+
+const scoreSelectorRowSx = {
+  display: "flex",
+  alignItems: "center",
+  gap: 0.35,
+  flexWrap: { xs: "wrap", sm: "nowrap" }
+} as const;
+
+const scoreSelectorLabelSx = {
+  width: { xs: "100%", sm: 80 },
+  fontSize: "0.74rem",
+  fontWeight: 500,
+  color: "#28455a"
+} as const;
+
+const scoreSelectorButtonRowSx = {
+  display: "flex",
+  alignItems: "center",
+  gap: 0.45,
+  flexWrap: "nowrap",
+  flex: "1 1 auto",
+  minWidth: 0,
+  overflowX: "auto",
+  pb: 0.2
+} as const;
+
+const scoreSelectorButtonSx = {
+  minWidth: 34,
+  height: 30,
+  px: 0.65,
+  fontWeight: 700,
+  fontSize: "0.78rem",
+  borderRadius: 1.4,
+  flex: "0 0 auto"
+} as const;
+
+const scoreSelectorButtonSelectedSx = {
+  backgroundColor: "#1e5b82",
+  borderColor: "#1e5b82",
+  color: "#fff",
+  "&:hover": {
+    backgroundColor: "#184b6c",
+    borderColor: "#184b6c"
+  }
+} as const;
+
+const scoreSelectorButtonUnselectedSx = {
+  backgroundColor: "#fff",
+  borderColor: "#b8c9d7",
+  color: "#2d4f67",
+  "&:hover": {
+    borderColor: "#8ca9be",
+    backgroundColor: "#f4f8fc"
+  }
+} as const;
+
+const scoreWinningBadgeSx = {
+  ...scoreSelectorButtonSx,
+  ...scoreSelectorButtonSelectedSx
 } as const;
 
 const rateControlSx = {
@@ -318,6 +410,17 @@ function MatchRecordModal({
   onSubmit
 }: MatchRecordModalProps) {
   const [values, setValues] = useState<MatchRecordValues>(() => buildCreateDefaults(createInitialValues));
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+  const [isPlayerNameRecordingEnabled, setIsPlayerNameRecordingEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    const saved = window.localStorage.getItem(PLAYER_NAME_RECORDING_STORAGE_KEY);
+    if (saved === "false") {
+      return false;
+    }
+    return true;
+  });
 
   const selectedRule = RULE_OPTIONS.find((option) => option.value === values.rule) ?? RULE_OPTIONS[0];
   const isDoubles = selectedRule.isDoubles;
@@ -363,11 +466,31 @@ function MatchRecordModal({
   }, [values.stage]);
   const rateBandSelectOptions = useMemo(() => [...RATE_BAND_OPTIONS].reverse(), []);
   const myRateBandIndex = RATE_BAND_OPTIONS.indexOf(values.myRateBand);
-  const opponentRateBandIndex = RATE_BAND_OPTIONS.indexOf(values.opponentRateBand);
-  const myScoreIndex = SCORE_OPTIONS.indexOf(values.myScore);
-  const opponentScoreIndex = SCORE_OPTIONS.indexOf(values.opponentScore);
   const myRateValue = Number.parseInt(values.myRate, 10);
   const canDecreaseRate = Number.isNaN(myRateValue) ? false : myRateValue > 0;
+  const isOpponentScoreSelected = (score: string) =>
+    values.opponentScore === score && values.myScore === toWinningScore(score);
+  const isMyScoreSelected = (score: string) =>
+    values.myScore === score && values.opponentScore === toWinningScore(score);
+  const hasScoreSelection = SCORE_SELECTION_OPTIONS.some(
+    (score) => isOpponentScoreSelected(score) || isMyScoreSelected(score)
+  );
+  const selectedScore =
+    SCORE_SELECTION_OPTIONS.find((score) => isOpponentScoreSelected(score) || isMyScoreSelected(score)) ??
+    null;
+  const winningScore = selectedScore ? toWinningScore(selectedScore) : null;
+  const selectedScoreOwner = selectedScore
+    ? isOpponentScoreSelected(selectedScore)
+      ? "opponent"
+      : "my"
+    : null;
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      PLAYER_NAME_RECORDING_STORAGE_KEY,
+      String(isPlayerNameRecordingEnabled)
+    );
+  }, [isPlayerNameRecordingEnabled]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -426,6 +549,8 @@ function MatchRecordModal({
       normalizedValues.opponentPartnerCharacter = "";
       normalizedValues.myPartnerRacket = "";
       normalizedValues.opponentPartnerRacket = "";
+      normalizedValues.myPartnerRateBand = "";
+      normalizedValues.opponentPartnerRateBand = "";
       normalizedValues.myPartnerPlayerName = "";
       normalizedValues.opponentPartnerPlayerName = "";
     }
@@ -437,23 +562,91 @@ function MatchRecordModal({
       normalizedValues.opponentPartnerRacket = "";
     }
 
+    if (!isPlayerNameRecordingEnabled) {
+      normalizedValues.opponentPlayerName = "";
+      normalizedValues.myPartnerPlayerName = "";
+      normalizedValues.opponentPartnerPlayerName = "";
+    }
+
     return normalizedValues;
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isSubmitting) {
+    if (isSubmitting || !hasScoreSelection) {
       return;
     }
     void onSubmit(buildNormalizedValues());
   };
 
   const handleSaveAndContinue = () => {
-    if (isSubmitting || mode !== "create") {
+    if (isSubmitting || mode !== "create" || !hasScoreSelection) {
       return;
     }
     void onSubmit(buildNormalizedValues(), { keepOpenAfterSave: true });
   };
+
+  const handleScoreSelection = (target: "opponent" | "my", selectedScore: string) => {
+    const winningScore = toWinningScore(selectedScore);
+    setValues((prev) =>
+      target === "opponent"
+        ? {
+            ...prev,
+            opponentScore: selectedScore,
+            myScore: winningScore
+          }
+        : {
+            ...prev,
+            myScore: selectedScore,
+            opponentScore: winningScore
+          }
+    );
+  };
+
+  const renderRateBandButtons = (
+    ariaLabel: string,
+    selectedValue: string,
+    onSelect: (value: string) => void
+  ) => (
+    <Box role="radiogroup" aria-label={ariaLabel} sx={opponentRateBandButtonRowSx}>
+      {rateBandSelectOptions.map((option) => {
+        const isSelected = selectedValue === option;
+        return (
+          <Button
+            key={`${ariaLabel}-${option}`}
+            type="button"
+            variant={isSelected ? "contained" : "outlined"}
+            onClick={() => onSelect(option)}
+            aria-pressed={isSelected}
+            sx={{
+              ...opponentRateBandButtonSx,
+              ...(isSelected
+                ? {
+                    backgroundColor: "#1e5b82",
+                    borderColor: "#1e5b82",
+                    color: "#fff",
+                    "&:hover": {
+                      backgroundColor: "#184b6c",
+                      borderColor: "#184b6c"
+                    }
+                  }
+                : {
+                    backgroundColor: "#fff",
+                    borderColor: "#b8c9d7",
+                    color: "#2d4f67",
+                    "&:hover": {
+                      borderColor: "#8ca9be",
+                      backgroundColor: "#f4f8fc"
+                    }
+                  })
+            }}
+          >
+            {option}
+          </Button>
+        );
+      })}
+    </Box>
+  );
 
   return (
     <Dialog
@@ -478,13 +671,43 @@ function MatchRecordModal({
           borderBottom: "1px solid #d6e1eb"
         }}
       >
-        <Stack spacing={0.2}>
-          <Typography component="div" variant="h6" fontWeight={700}>
-            {modalTitle}
-          </Typography>
-          <Typography component="div" variant="body2" color="text.secondary">
-            試合情報を入力して保存します。
-          </Typography>
+        <Stack spacing={0.7}>
+          <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 1 }}>
+            <Stack spacing={0.2}>
+              <Typography component="div" variant="h6" fontWeight={700}>
+                {modalTitle}
+              </Typography>
+            </Stack>
+            <IconButton
+              size="small"
+              aria-label="オプション設定"
+              onClick={() => setIsOptionsOpen((prev) => !prev)}
+            >
+              <SettingsIcon fontSize="small" />
+            </IconButton>
+          </Box>
+          <Collapse in={isOptionsOpen}>
+            <Box
+              sx={{
+                border: "1px solid #d6e1eb",
+                borderRadius: 1.5,
+                px: 1.2,
+                py: 0.6,
+                backgroundColor: "#f8fbff"
+              }}
+            >
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={isPlayerNameRecordingEnabled}
+                    onChange={(event) => setIsPlayerNameRecordingEnabled(event.target.checked)}
+                  />
+                }
+                label="プレイヤー名記録"
+              />
+            </Box>
+          </Collapse>
         </Stack>
       </DialogTitle>
 
@@ -582,64 +805,46 @@ function MatchRecordModal({
             </Box>
 
             <Box sx={sectionSx}>
-              <Stack spacing={1.5}>
+              <Stack
+                spacing={1.5}
+                sx={{
+                  "& > .partner-rate-band-row": {
+                    mt: "2px !important"
+                  }
+                }}
+              >
                 <Typography variant="subtitle2" fontWeight={700} sx={sectionTitleSx}>
                   対戦相手情報
                 </Typography>
                 <Box sx={singleFieldRowSx}>
-                  <Box sx={rateBandControlSx}>
-                    <TextField
-                      select
-                      label="相手のレート帯"
-                      value={values.opponentRateBand}
-                      onChange={(event) =>
-                        setValues((prev) => ({
-                          ...prev,
-                          opponentRateBand: event.target.value
-                        }))
-                      }
-                      size="small"
-                      required
-                      sx={fieldWidthSx.rateBand}
-                    >
-                      {rateBandSelectOptions.map((option) => (
-                        <MenuItem key={option} value={option}>
-                          {option}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                    <Box sx={rateBandButtonsSx}>
-                      <IconButton
-                        size="small"
-                        aria-label="相手のレート帯を下げる"
-                        onClick={() =>
-                          setValues((prev) => ({
-                            ...prev,
-                            opponentRateBand: shiftRateBand(prev.opponentRateBand, -1)
-                          }))
-                        }
-                        disabled={opponentRateBandIndex <= 0}
-                        sx={{ width: 28, height: 28 }}
-                      >
-                        <KeyboardArrowDownIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        aria-label="相手のレート帯を上げる"
-                        onClick={() =>
-                          setValues((prev) => ({
-                            ...prev,
-                            opponentRateBand: shiftRateBand(prev.opponentRateBand, 1)
-                          }))
-                        }
-                        disabled={opponentRateBandIndex >= RATE_BAND_OPTIONS.length - 1}
-                        sx={{ width: 28, height: 28 }}
-                      >
-                        <KeyboardArrowUpIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
+                  <Box sx={opponentRateBandSelectorSx}>
+                    {renderRateBandButtons("相手のレート帯", values.opponentRateBand, (option) =>
+                      setValues((prev) => ({
+                        ...prev,
+                        opponentRateBand: option
+                      }))
+                    )}
                   </Box>
                 </Box>
+
+                {isDoubles && (
+                  <Box className="partner-rate-band-row" sx={singleFieldRowSx}>
+                    <Box sx={opponentRateBandSelectorSx}>
+                      <Typography variant="body2" sx={rateBandFieldLabelSx}>
+                        パートナー
+                      </Typography>
+                      {renderRateBandButtons(
+                        "相手パートナーのレート帯",
+                        values.opponentPartnerRateBand,
+                        (option) =>
+                          setValues((prev) => ({
+                            ...prev,
+                            opponentPartnerRateBand: option
+                          }))
+                      )}
+                    </Box>
+                  </Box>
+                )}
 
                 <Box sx={twoColSx}>
                   <TextField
@@ -733,44 +938,68 @@ function MatchRecordModal({
                   </Box>
                 )}
 
-                <Box sx={twoColSx}>
-                  <TextField
-                    label="相手プレイヤー名（任意）"
-                    value={values.opponentPlayerName}
-                    onChange={(event) =>
-                      setValues((prev) => ({
-                        ...prev,
-                        opponentPlayerName: event.target.value
-                      }))
-                    }
-                    placeholder="例: Rival01"
-                    size="small"
-                    sx={fieldWidthSx.playerName}
-                  />
-                  {isDoubles && (
+                {isPlayerNameRecordingEnabled && (
+                  <Box sx={twoColSx}>
                     <TextField
-                      label="相手パートナープレイヤー名（任意）"
-                      value={values.opponentPartnerPlayerName}
+                      label="相手プレイヤー名（任意）"
+                      value={values.opponentPlayerName}
                       onChange={(event) =>
                         setValues((prev) => ({
                           ...prev,
-                          opponentPartnerPlayerName: event.target.value
+                          opponentPlayerName: event.target.value
                         }))
                       }
-                      placeholder="例: Rival02"
+                      placeholder="例: Rival01"
                       size="small"
                       sx={fieldWidthSx.playerName}
                     />
-                  )}
-                </Box>
+                    {isDoubles && (
+                      <TextField
+                        label="相手パートナープレイヤー名（任意）"
+                        value={values.opponentPartnerPlayerName}
+                        onChange={(event) =>
+                          setValues((prev) => ({
+                            ...prev,
+                            opponentPartnerPlayerName: event.target.value
+                          }))
+                        }
+                        placeholder="例: Rival02"
+                        size="small"
+                        sx={fieldWidthSx.playerName}
+                      />
+                    )}
+                  </Box>
+                )}
               </Stack>
             </Box>
 
             <Box sx={sectionSx}>
-              <Stack spacing={1.5}>
+              <Stack
+                spacing={1.5}
+                sx={{
+                  "& > .partner-rate-band-row": {
+                    mt: "2px !important"
+                  }
+                }}
+              >
                 <Typography variant="subtitle2" fontWeight={700} sx={sectionTitleSx}>
                   自キャラ・自チーム情報
                 </Typography>
+                {isDoubles && (
+                  <Box className="partner-rate-band-row" sx={singleFieldRowSx}>
+                    <Box sx={opponentRateBandSelectorSx}>
+                      <Typography variant="body2" sx={rateBandFieldLabelSx}>
+                        パートナー
+                      </Typography>
+                      {renderRateBandButtons("味方パートナーのレート帯", values.myPartnerRateBand, (option) =>
+                        setValues((prev) => ({
+                          ...prev,
+                          myPartnerRateBand: option
+                        }))
+                      )}
+                    </Box>
+                  </Box>
+                )}
                 <Box sx={twoColSx}>
                   <TextField
                     select
@@ -863,7 +1092,7 @@ function MatchRecordModal({
                   </Box>
                 )}
 
-                {isDoubles && (
+                {isDoubles && isPlayerNameRecordingEnabled && (
                   <Box sx={twoColSx}>
                     <Box sx={{ display: { xs: "none", sm: "block" }, ...fieldWidthSx.character }} />
                     <TextField
@@ -891,109 +1120,69 @@ function MatchRecordModal({
                 </Typography>
 
                 <Box sx={resultGridSx}>
-                  <Box sx={scoreControlSx}>
-                    <TextField
-                      select
-                      label="スコア（自分）"
-                      value={values.myScore}
-                      onChange={(event) =>
-                        setValues((prev) => ({
-                          ...prev,
-                          myScore: event.target.value
-                        }))
-                      }
-                      size="small"
-                      required
-                      sx={fieldWidthSx.score}
-                    >
-                      {SCORE_OPTIONS.map((option) => (
-                        <MenuItem key={option} value={option}>
-                          {option}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                    <Box sx={rateBandButtonsSx}>
-                      <IconButton
-                        size="small"
-                        aria-label="自分スコアを下げる"
-                        onClick={() =>
-                          setValues((prev) => ({
-                            ...prev,
-                            myScore: shiftScore(prev.myScore, -1)
-                          }))
-                        }
-                        disabled={myScoreIndex <= 0}
-                        sx={{ width: 28, height: 28 }}
-                      >
-                        <RemoveIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        aria-label="自分スコアを上げる"
-                        onClick={() =>
-                          setValues((prev) => ({
-                            ...prev,
-                            myScore: shiftScore(prev.myScore, 1)
-                          }))
-                        }
-                        disabled={myScoreIndex >= SCORE_OPTIONS.length - 1}
-                        sx={{ width: 28, height: 28 }}
-                      >
-                        <AddIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  </Box>
-                  <Box sx={scoreControlSx}>
-                    <TextField
-                      select
-                      label="スコア（相手）"
-                      value={values.opponentScore}
-                      onChange={(event) =>
-                        setValues((prev) => ({
-                          ...prev,
-                          opponentScore: event.target.value
-                        }))
-                      }
-                      size="small"
-                      required
-                      sx={fieldWidthSx.score}
-                    >
-                      {SCORE_OPTIONS.map((option) => (
-                        <MenuItem key={option} value={option}>
-                          {option}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                    <Box sx={rateBandButtonsSx}>
-                      <IconButton
-                        size="small"
-                        aria-label="相手スコアを下げる"
-                        onClick={() =>
-                          setValues((prev) => ({
-                            ...prev,
-                            opponentScore: shiftScore(prev.opponentScore, -1)
-                          }))
-                        }
-                        disabled={opponentScoreIndex <= 0}
-                        sx={{ width: 28, height: 28 }}
-                      >
-                        <RemoveIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        aria-label="相手スコアを上げる"
-                        onClick={() =>
-                          setValues((prev) => ({
-                            ...prev,
-                            opponentScore: shiftScore(prev.opponentScore, 1)
-                          }))
-                        }
-                        disabled={opponentScoreIndex >= SCORE_OPTIONS.length - 1}
-                        sx={{ width: 28, height: 28 }}
-                      >
-                        <AddIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
+                  <Box sx={scoreSelectorSx}>
+                    <Stack spacing={0.75}>
+                      <Box sx={scoreSelectorRowSx}>
+                        <Typography variant="body2" sx={scoreSelectorLabelSx}>
+                          自分スコア
+                        </Typography>
+                        <Box sx={scoreSelectorButtonRowSx}>
+                          {SCORE_SELECTION_OPTIONS.map((score) => (
+                            <Button
+                              key={`my-score-${score}`}
+                              type="button"
+                              variant={isMyScoreSelected(score) ? "contained" : "outlined"}
+                              onClick={() => handleScoreSelection("my", score)}
+                              aria-pressed={isMyScoreSelected(score)}
+                              sx={{
+                                ...scoreSelectorButtonSx,
+                                ...(isMyScoreSelected(score)
+                                  ? scoreSelectorButtonSelectedSx
+                                  : scoreSelectorButtonUnselectedSx)
+                              }}
+                            >
+                              {score}
+                            </Button>
+                          ))}
+                          {winningScore !== null && selectedScoreOwner === "opponent" && (
+                            <Button type="button" tabIndex={-1} aria-hidden sx={scoreWinningBadgeSx}>
+                              {winningScore}
+                            </Button>
+                          )}
+                        </Box>
+                      </Box>
+
+                      <Box sx={scoreSelectorRowSx}>
+                        <Typography variant="body2" sx={scoreSelectorLabelSx}>
+                          相手スコア
+                        </Typography>
+                        <Box sx={scoreSelectorButtonRowSx}>
+                          {SCORE_SELECTION_OPTIONS.map((score) => (
+                            <Button
+                              key={`opponent-score-${score}`}
+                              type="button"
+                              variant={isOpponentScoreSelected(score) ? "contained" : "outlined"}
+                              onClick={() => handleScoreSelection("opponent", score)}
+                              aria-pressed={isOpponentScoreSelected(score)}
+                              sx={{
+                                ...scoreSelectorButtonSx,
+                                ...(isOpponentScoreSelected(score)
+                                  ? scoreSelectorButtonSelectedSx
+                                  : scoreSelectorButtonUnselectedSx)
+                              }}
+                            >
+                              {score}
+                            </Button>
+                          ))}
+                          {winningScore !== null && selectedScoreOwner === "my" && (
+                            <Button type="button" tabIndex={-1} aria-hidden sx={scoreWinningBadgeSx}>
+                              {winningScore}
+                            </Button>
+                          )}
+                        </Box>
+                      </Box>
+
+                    </Stack>
                   </Box>
 
                   <Box sx={rateControlSx}>
@@ -1077,6 +1266,7 @@ function MatchRecordModal({
                       </IconButton>
                     </Box>
                   </Box>
+
                   <Box sx={rateBandControlSx}>
                     <TextField
                       select
@@ -1158,7 +1348,7 @@ function MatchRecordModal({
               {isSubmitting ? "保存中..." : "保存して続ける"}
             </Button>
           )}
-          <Button type="submit" variant="contained" disabled={isSubmitting}>
+          <Button type="submit" variant="contained" disabled={isSubmitting || !hasScoreSelection}>
             {isSubmitting ? "保存中..." : "保存"}
           </Button>
         </DialogActions>

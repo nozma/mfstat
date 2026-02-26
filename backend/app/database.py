@@ -73,7 +73,9 @@ MATCH_RECORD_REQUIRED_COLUMNS = {
     "my_rate",
     "result",
     "my_rate_band",
+    "my_partner_rate_band",
     "opponent_rate_band",
+    "opponent_partner_rate_band",
     "opponent_player_name",
     "my_partner_player_name",
     "opponent_partner_player_name",
@@ -114,6 +116,22 @@ def _sync_match_record_result_values() -> None:
         )
 
 
+def _ensure_match_record_partner_rate_band_columns() -> None:
+    existing_columns = _match_record_columns()
+    statements: list[str] = []
+    if "my_partner_rate_band" not in existing_columns:
+        statements.append("ALTER TABLE matchrecord ADD COLUMN my_partner_rate_band TEXT")
+    if "opponent_partner_rate_band" not in existing_columns:
+        statements.append("ALTER TABLE matchrecord ADD COLUMN opponent_partner_rate_band TEXT")
+
+    if not statements:
+        return
+
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.exec_driver_sql(statement)
+
+
 def _match_record_table_exists() -> bool:
     with engine.connect() as connection:
         result = connection.exec_driver_sql(
@@ -131,6 +149,7 @@ def _match_record_columns() -> set[str]:
 def init_db() -> None:
     if _match_record_table_exists():
         _ensure_match_record_result_column()
+        _ensure_match_record_partner_rate_band_columns()
         _sync_match_record_result_values()
         existing_columns = _match_record_columns()
         if not MATCH_RECORD_REQUIRED_COLUMNS.issubset(existing_columns):

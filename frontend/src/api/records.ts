@@ -25,7 +25,9 @@ type MatchRecordDto = {
   my_rate: number;
   result: string;
   my_rate_band: string;
+  my_partner_rate_band: string | null;
   opponent_rate_band: string;
+  opponent_partner_rate_band: string | null;
   opponent_player_name: string | null;
   my_partner_player_name: string | null;
   opponent_partner_player_name: string | null;
@@ -47,7 +49,9 @@ type MatchRecordPayload = {
   opponent_partner_racket: string | null;
   my_rate: number;
   my_rate_band: string;
+  my_partner_rate_band: string | null;
   opponent_rate_band: string;
+  opponent_partner_rate_band: string | null;
   opponent_player_name: string | null;
   my_partner_player_name: string | null;
   opponent_partner_player_name: string | null;
@@ -95,7 +99,9 @@ const toPayload = (values: MatchRecordValues): MatchRecordPayload => ({
   opponent_partner_racket: trimOrNull(values.opponentPartnerRacket),
   my_rate: Number(values.myRate),
   my_rate_band: values.myRateBand,
+  my_partner_rate_band: trimOrNull(values.myPartnerRateBand),
   opponent_rate_band: values.opponentRateBand,
+  opponent_partner_rate_band: trimOrNull(values.opponentPartnerRateBand),
   opponent_player_name: trimOrNull(values.opponentPlayerName),
   my_partner_player_name: trimOrNull(values.myPartnerPlayerName),
   opponent_partner_player_name: trimOrNull(values.opponentPartnerPlayerName)
@@ -120,7 +126,9 @@ const fromDto = (dto: MatchRecordDto): MatchRecord => ({
   myRate: String(dto.my_rate),
   result: dto.result,
   myRateBand: dto.my_rate_band,
+  myPartnerRateBand: dto.my_partner_rate_band ?? "",
   opponentRateBand: dto.opponent_rate_band,
+  opponentPartnerRateBand: dto.opponent_partner_rate_band ?? "",
   opponentPlayerName: dto.opponent_player_name ?? "",
   myPartnerPlayerName: dto.my_partner_player_name ?? "",
   opponentPartnerPlayerName: dto.opponent_partner_player_name ?? ""
