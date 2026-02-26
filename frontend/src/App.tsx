@@ -1035,7 +1035,7 @@ function App() {
     const plotWidth = width - margin.left - margin.right;
     const plotHeight = height - margin.top - margin.bottom;
 
-    const samples = filteredRecords
+    const samples = records
       .map((record) => ({
         id: record.id,
         rule: record.rule,
@@ -1142,9 +1142,9 @@ function App() {
     }));
 
     return { width, height, margin, plotHeight, series, yTicks, xTicks };
-  }, [filteredRecords]);
+  }, [records]);
   const dailyRateCandles = useMemo<DailyRateCandle[]>(() => {
-    const samples = filteredRecords
+    const samples = records
       .filter((record) => record.rule === selectedTrendRule)
       .map((record) => ({
         id: record.id,
@@ -1202,7 +1202,7 @@ function App() {
     return Array.from(grouped.values())
       .sort((left, right) => left.firstTimestamp - right.firstTimestamp)
       .map(({ firstTimestamp, lastTimestamp, ...candle }) => candle);
-  }, [filteredRecords, selectedTrendRule]);
+  }, [records, selectedTrendRule]);
   const resetFilters = () => {
     setSelectedRules([]);
     setSelectedStages([]);
