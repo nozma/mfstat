@@ -31,7 +31,9 @@ import {
 import MatchRecordModal, {
   MatchRecordValues
 } from "./components/MatchRecordModal";
+import RateTrendLineChart, { RateTrendLineSeries } from "./components/RateTrendLineChart";
 import RateTrendStockChart, { DailyRateCandle } from "./components/RateTrendStockChart";
+import RateTrendStepChart, { RateTrendStepSeries } from "./components/RateTrendStepChart";
 import RateTrendViewSwitcher, { RateTrendViewMode } from "./components/RateTrendViewSwitcher";
 import {
   MatchRecord,
@@ -104,6 +106,13 @@ const displayResultLabel = (value: string) => {
   return value;
 };
 const formatPercent = (value: number) => `${Math.round(value)}%`;
+const formatRateWithBand = (rate: number | null, rateBand: string | null) => {
+  if (rate === null) {
+    return "-";
+  }
+  const trimmedRateBand = (rateBand ?? "").trim();
+  return trimmedRateBand.length > 0 ? `${trimmedRateBand} ${rate}` : String(rate);
+};
 
 const DatetimeEditCell = (params: GridRenderEditCellParams<MatchRecord, string>) => {
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -321,20 +330,16 @@ const RULE_TREND_COLORS: Record<MatchRecordValues["rule"], string> = {
   doubles_fever_off: "#6a1b9a"
 };
 
-const formatTrendDate = (timestamp: number) => {
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-  return `${date.getMonth() + 1}月${date.getDate()}日`;
-};
-
 const toDateKey = (timestamp: number) => {
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) {
     return "";
   }
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+};
+const toDateStartTimestamp = (dateKey: string) => {
+  const timestamp = new Date(`${dateKey}T00:00:00`).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
 };
 
 const APP_VERSION = __APP_VERSION__;
@@ -392,7 +397,7 @@ function App() {
     }
 
     const saved = window.localStorage.getItem(RATE_TREND_VIEW_MODE_STORAGE_KEY);
-    if (saved === "line" || saved === "candlestick") {
+    if (saved === "line" || saved === "step" || saved === "candlestick") {
       return saved;
     }
     return "line";
@@ -1095,20 +1100,15 @@ function App() {
         return left.label.localeCompare(right.label, "ja");
       });
   }, [characterLabelByValue, filteredRecords]);
-  const rateTrendChart = useMemo(() => {
-    const width = 760;
-    const height = 300;
-    const margin = { top: 16, right: 16, bottom: 42, left: 52 };
-    const plotWidth = width - margin.left - margin.right;
-    const plotHeight = height - margin.top - margin.bottom;
-
+  const rateTrendSeries = useMemo<RateTrendLineSeries[]>(() => {
     const samples = records
       .map((record) => ({
         id: record.id,
         rule: record.rule,
         timestamp: parsePlayedAtTimestamp(record.playedAt),
         playedAt: record.playedAt,
-        rate: Number(record.myRate)
+        rate: Number(record.myRate),
+        rateBand: record.myRateBand.trim()
       }))
       .filter((sample) => sample.timestamp > 0 && !Number.isNaN(sample.rate))
       .sort((left, right) => {
@@ -1119,96 +1119,108 @@ function App() {
         return left.id - right.id;
       });
 
-    if (samples.length === 0) {
-      return {
-        width,
-        height,
-        margin,
-        plotHeight,
-        series: [] as Array<{
-          rule: MatchRecordValues["rule"];
-          label: string;
-          color: string;
-          path: string;
-          points: Array<{ x: number; y: number; rate: number; playedAt: string; id: number }>;
-        }>,
-        yTicks: [] as Array<{ y: number; label: string }>,
-        xTicks: [] as Array<{ x: number; label: string; key: string }>
-      };
-    }
-
-    const minTimestamp = samples[0].timestamp;
-    const maxTimestamp = samples[samples.length - 1].timestamp;
-
-    let minRate = Math.min(...samples.map((sample) => sample.rate));
-    let maxRate = Math.max(...samples.map((sample) => sample.rate));
-    if (minRate === maxRate) {
-      minRate -= 1;
-      maxRate += 1;
-    }
-    const ratePadding = Math.max(8, (maxRate - minRate) * 0.1);
-    const yMin = Math.floor(minRate - ratePadding);
-    const yMax = Math.ceil(maxRate + ratePadding);
-    const normalizedYMax = yMax === yMin ? yMin + 1 : yMax;
-
-    const xFor = (timestamp: number) => {
-      if (maxTimestamp === minTimestamp) {
-        return margin.left + plotWidth / 2;
-      }
-      return (
-        margin.left + ((timestamp - minTimestamp) / (maxTimestamp - minTimestamp)) * plotWidth
-      );
-    };
-    const yFor = (rate: number) =>
-      margin.top + (1 - (rate - yMin) / (normalizedYMax - yMin)) * plotHeight;
-
-    const pointsByRule = new Map<
-      MatchRecordValues["rule"],
-      Array<{ x: number; y: number; rate: number; playedAt: string; id: number }>
-    >();
+    const pointsByRule = new Map<MatchRecordValues["rule"], RateTrendLineSeries["points"]>();
     samples.forEach((sample) => {
-      const point = {
-        x: xFor(sample.timestamp),
-        y: yFor(sample.rate),
-        rate: sample.rate,
-        playedAt: sample.playedAt,
-        id: sample.id
-      };
       const points = pointsByRule.get(sample.rule) ?? [];
-      points.push(point);
+      points.push({
+        id: sample.id,
+        timestamp: sample.timestamp,
+        playedAt: sample.playedAt,
+        rate: sample.rate,
+        rateBand: sample.rateBand
+      });
       pointsByRule.set(sample.rule, points);
     });
 
-    const series = RULE_OPTIONS.map((option) => {
-      const points = pointsByRule.get(option.value) ?? [];
-      const path = points
-        .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
-        .join(" ");
+    return RULE_OPTIONS.map((option) => ({
+      rule: option.value,
+      label: option.label,
+      color: RULE_TREND_COLORS[option.value],
+      points: pointsByRule.get(option.value) ?? []
+    })).filter((series) => series.points.length > 0);
+  }, [records]);
+  const rateTrendStepSeries = useMemo<RateTrendStepSeries[]>(() => {
+    const samples = records
+      .map((record) => ({
+        id: record.id,
+        rule: record.rule,
+        timestamp: parsePlayedAtTimestamp(record.playedAt),
+        playedAt: record.playedAt,
+        rate: Number(record.myRate),
+        rateBand: record.myRateBand.trim()
+      }))
+      .filter((sample) => sample.timestamp > 0 && !Number.isNaN(sample.rate))
+      .sort((left, right) => {
+        const timestampDiff = left.timestamp - right.timestamp;
+        if (timestampDiff !== 0) {
+          return timestampDiff;
+        }
+        return left.id - right.id;
+      });
+
+    const dailyByRule = new Map<
+      MatchRecordValues["rule"],
+      Map<
+        string,
+        {
+          dateKey: string;
+          dayStartTimestamp: number;
+          end: (typeof samples)[number];
+        }
+      >
+    >();
+
+    samples.forEach((sample) => {
+      const dateKey = toDateKey(sample.timestamp);
+      if (dateKey.length === 0) {
+        return;
+      }
+
+      const dayStartTimestamp = toDateStartTimestamp(dateKey);
+      const groupedByDay = dailyByRule.get(sample.rule) ?? new Map();
+      const current = groupedByDay.get(dateKey);
+      if (!current) {
+        groupedByDay.set(dateKey, {
+          dateKey,
+          dayStartTimestamp,
+          end: sample
+        });
+        dailyByRule.set(sample.rule, groupedByDay);
+        return;
+      }
+
+      current.end = sample;
+    });
+
+    return RULE_OPTIONS.map((option) => {
+      const groupedByDay = dailyByRule.get(option.value);
+      if (!groupedByDay || groupedByDay.size === 0) {
+        return {
+          rule: option.value,
+          label: option.label,
+          color: RULE_TREND_COLORS[option.value],
+          points: []
+        };
+      }
+
+      const points = Array.from(groupedByDay.values())
+        .sort((left, right) => left.dayStartTimestamp - right.dayStartTimestamp)
+        .map((item) => ({
+          id: item.end.id,
+          timestamp: item.dayStartTimestamp,
+          playedAt: item.end.playedAt,
+          rate: item.end.rate,
+          rateBand: item.end.rateBand,
+          dateKey: item.dateKey
+        }));
+
       return {
         rule: option.value,
         label: option.label,
         color: RULE_TREND_COLORS[option.value],
-        path,
         points
       };
-    }).filter((entry) => entry.points.length > 0);
-
-    const yTicks = Array.from({ length: 5 }, (_, index) => {
-      const value = yMin + ((normalizedYMax - yMin) * (4 - index)) / 4;
-      return { y: yFor(value), label: Math.round(value).toString() };
-    });
-
-    const tickTimestamps =
-      maxTimestamp === minTimestamp
-        ? [minTimestamp]
-        : [minTimestamp, minTimestamp + (maxTimestamp - minTimestamp) / 2, maxTimestamp];
-    const xTicks = tickTimestamps.map((timestamp, index) => ({
-      x: xFor(timestamp),
-      label: formatTrendDate(timestamp),
-      key: `${Math.round(timestamp)}-${index}`
-    }));
-
-    return { width, height, margin, plotHeight, series, yTicks, xTicks };
+    }).filter((series) => series.points.length > 0);
   }, [records]);
   const dailyRateCandles = useMemo<DailyRateCandle[]>(() => {
     const samples = records
@@ -1282,6 +1294,7 @@ function App() {
             return {
               id: record.id,
               rate,
+              rateBand: record.myRateBand.trim(),
               playedAtTimestamp,
               createdAtTimestamp: Number.isNaN(createdAtTimestamp) ? 0 : createdAtTimestamp
             };
@@ -1307,18 +1320,25 @@ function App() {
             ruleTypeLabel: option.isDoubles ? "ダブルス" : "シングルス",
             feverLabel: `フィーバーラケット${option.hasFeverRacket ? "あり" : "なし"}`,
             currentRate: null as number | null,
-            maxRate: null as number | null
+            currentRateBand: null as string | null,
+            maxRate: null as number | null,
+            maxRateBand: null as string | null
           };
         }
 
         const latest = samples[samples.length - 1];
         const maxRate = Math.max(...samples.map((sample) => sample.rate));
+        const maxRateSample = [...samples]
+          .reverse()
+          .find((sample) => sample.rate === maxRate) ?? null;
         return {
           rule: option.value,
           ruleTypeLabel: option.isDoubles ? "ダブルス" : "シングルス",
           feverLabel: `フィーバーラケット${option.hasFeverRacket ? "あり" : "なし"}`,
           currentRate: latest.rate,
-          maxRate
+          currentRateBand: latest.rateBand,
+          maxRate,
+          maxRateBand: maxRateSample?.rateBand ?? null
         };
       }),
     [records]
@@ -2029,13 +2049,11 @@ function App() {
                       </p>
                       <p className="summary-rate-overview-line">
                         <span>現在</span>
-                        <strong>
-                          {item.currentRate === null ? "-" : item.currentRate.toLocaleString("ja-JP")}
-                        </strong>
+                        <strong>{formatRateWithBand(item.currentRate, item.currentRateBand)}</strong>
                       </p>
                       <p className="summary-rate-overview-line">
                         <span>最大</span>
-                        <strong>{item.maxRate === null ? "-" : item.maxRate.toLocaleString("ja-JP")}</strong>
+                        <strong>{formatRateWithBand(item.maxRate, item.maxRateBand)}</strong>
                       </p>
                     </div>
                   ))}
@@ -2080,100 +2098,16 @@ function App() {
                         ruleLabel={ruleLabelByValue[selectedTrendRule]}
                       />
                     )
-                  ) : rateTrendChart.series.length === 0 ? (
+                  ) : rateTrendViewMode === "step" ? (
+                    rateTrendStepSeries.length === 0 ? (
+                      <p className="summary-sub">対象レコードなし</p>
+                    ) : (
+                      <RateTrendStepChart series={rateTrendStepSeries} />
+                    )
+                  ) : rateTrendSeries.length === 0 ? (
                     <p className="summary-sub">対象レコードなし</p>
                   ) : (
-                    <>
-                      <div className="rate-trend-legend">
-                        {rateTrendChart.series.map((series) => (
-                          <span key={series.rule} className="rate-trend-legend-item">
-                            <span
-                              className="rate-trend-legend-swatch"
-                              style={{ backgroundColor: series.color }}
-                            />
-                            <span>{ruleLabelByValue[series.rule]}</span>
-                          </span>
-                        ))}
-                      </div>
-                      <div className="rate-trend-chart-wrap">
-                        <svg
-                          viewBox={`0 0 ${rateTrendChart.width} ${rateTrendChart.height}`}
-                          className="rate-trend-svg"
-                          role="img"
-                          aria-label="ルール別レート推移グラフ"
-                        >
-                          {rateTrendChart.yTicks.map((tick) => (
-                            <g key={`y-${tick.label}-${tick.y}`}>
-                              <line
-                                x1={rateTrendChart.margin.left}
-                                y1={tick.y}
-                                x2={rateTrendChart.width - rateTrendChart.margin.right}
-                                y2={tick.y}
-                                className="rate-trend-grid-line"
-                              />
-                              <text
-                                x={rateTrendChart.margin.left - 8}
-                                y={tick.y + 4}
-                                textAnchor="end"
-                                className="rate-trend-axis-text"
-                              >
-                                {tick.label}
-                              </text>
-                            </g>
-                          ))}
-
-                          <line
-                            x1={rateTrendChart.margin.left}
-                            y1={rateTrendChart.margin.top + rateTrendChart.plotHeight}
-                            x2={rateTrendChart.width - rateTrendChart.margin.right}
-                            y2={rateTrendChart.margin.top + rateTrendChart.plotHeight}
-                            className="rate-trend-axis-line"
-                          />
-
-                          {rateTrendChart.xTicks.map((tick) => (
-                            <g key={`x-${tick.key}`}>
-                              <line
-                                x1={tick.x}
-                                y1={rateTrendChart.margin.top + rateTrendChart.plotHeight}
-                                x2={tick.x}
-                                y2={rateTrendChart.margin.top + rateTrendChart.plotHeight + 5}
-                                className="rate-trend-axis-line"
-                              />
-                              <text
-                                x={tick.x}
-                                y={rateTrendChart.margin.top + rateTrendChart.plotHeight + 18}
-                                textAnchor="middle"
-                                className="rate-trend-axis-text"
-                              >
-                                {tick.label}
-                              </text>
-                            </g>
-                          ))}
-
-                          {rateTrendChart.series.map((series) => (
-                            <g key={`line-${series.rule}`}>
-                              <path
-                                d={series.path}
-                                className="rate-trend-path"
-                                style={{ stroke: series.color }}
-                              />
-                              {series.points.map((point) => (
-                                <circle
-                                  key={`${series.rule}-${point.id}`}
-                                  cx={point.x}
-                                  cy={point.y}
-                                  r={3}
-                                  className="rate-trend-point"
-                                  style={{ fill: series.color }}
-                                >
-                                  <title>{`${ruleLabelByValue[series.rule]} ${point.rate} (${formatPlayedAt(point.playedAt)})`}</title>
-                                </circle>
-                              ))}
-                            </g>
-                          ))}
-                        </svg>
-                      </div>
-                    </>
+                    <RateTrendLineChart series={rateTrendSeries} />
                   )}
                 </div>
               </div>

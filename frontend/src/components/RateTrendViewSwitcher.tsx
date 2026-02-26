@@ -1,6 +1,6 @@
 import { FormControl, InputLabel, MenuItem, Select, SelectChangeEvent } from "@mui/material";
 
-export type RateTrendViewMode = "line" | "candlestick";
+export type RateTrendViewMode = "line" | "step" | "candlestick";
 
 type RateTrendViewOption = {
   value: RateTrendViewMode;
@@ -9,6 +9,7 @@ type RateTrendViewOption = {
 
 export const RATE_TREND_VIEW_OPTIONS: RateTrendViewOption[] = [
   { value: "line", label: "折れ線グラフ" },
+  { value: "step", label: "階段グラフ" },
   { value: "candlestick", label: "ローソク" }
 ];
 
