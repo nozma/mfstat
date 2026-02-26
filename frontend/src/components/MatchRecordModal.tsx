@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -15,8 +15,6 @@ import {
   TextField,
   Typography
 } from "@mui/material";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import SettingsIcon from "@mui/icons-material/Settings";
 import {
   CHARACTER_OPTIONS,
@@ -66,6 +64,8 @@ type MatchRecordModalProps = {
 };
 
 const PLAYER_NAME_RECORDING_STORAGE_KEY = "mfstat.modal.playerNameRecording";
+const DEFAULT_INITIAL_RATE = "2000";
+const DEFAULT_INITIAL_RATE_BAND = RATE_BAND_OPTIONS[0];
 
 const defaultValues: MatchRecordValues = {
   playedAt: "",
@@ -187,16 +187,6 @@ const sortRacketOptions = (stats: Map<string, UsageStat>) => {
   });
 };
 
-const shiftRateBand = (current: string, direction: -1 | 1) => {
-  const currentIndex = RATE_BAND_OPTIONS.indexOf(current);
-  const safeIndex = currentIndex === -1 ? 0 : currentIndex;
-  const nextIndex = Math.min(
-    RATE_BAND_OPTIONS.length - 1,
-    Math.max(0, safeIndex + direction)
-  );
-  return RATE_BAND_OPTIONS[nextIndex];
-};
-
 const shiftRateValue = (current: string, amount: number) => {
   const parsed = Number.parseInt(current, 10);
   const base = Number.isNaN(parsed) ? 0 : parsed;
@@ -276,18 +266,11 @@ const numberInputNoSpinnerSx = {
     }
 } as const;
 
-const rateBandControlSx = {
+const resultRightColumnSx = {
   display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  width: { xs: "100%", sm: 189 },
-  gap: 0.5
-} as const;
-
-const rateBandButtonsSx = {
-  display: "flex",
-  alignItems: "center",
-  gap: 0.25
+  flexDirection: "column",
+  gap: 1,
+  alignItems: "stretch"
 } as const;
 
 const opponentRateBandSelectorSx = {
@@ -425,14 +408,50 @@ function MatchRecordModal({
   const selectedRule = RULE_OPTIONS.find((option) => option.value === values.rule) ?? RULE_OPTIONS[0];
   const isDoubles = selectedRule.isDoubles;
   const hasFeverRacket = selectedRule.hasFeverRacket;
+  const createRateInitializedRuleRef = useRef<RuleOption["value"] | null>(null);
+  const latestStatsByRule = useMemo(() => {
+    const stats = new Map<
+      RuleOption["value"],
+      { rate: string; myRateBand: string; latestPlayedAt: number }
+    >();
+
+    historyRecords.forEach((record) => {
+      const normalizedRate = record.myRate.trim();
+      const normalizedMyRateBand = record.myRateBand.trim();
+      if (!/^\d+$/.test(normalizedRate) || normalizedMyRateBand.length === 0) {
+        return;
+      }
+
+      const playedAt = parsePlayedAt(record.playedAt);
+      const current = stats.get(record.rule);
+      if (!current || playedAt > current.latestPlayedAt) {
+        stats.set(record.rule, {
+          rate: String(Number.parseInt(normalizedRate, 10)),
+          myRateBand: normalizedMyRateBand,
+          latestPlayedAt: playedAt
+        });
+      }
+    });
+
+    return stats;
+  }, [historyRecords]);
+  const initialStatsForSelectedRule = latestStatsByRule.get(selectedRule.value);
+  const initialMyRateForSelectedRule = initialStatsForSelectedRule?.rate ?? DEFAULT_INITIAL_RATE;
+  const initialMyRateBandForSelectedRule =
+    initialStatsForSelectedRule?.myRateBand ?? DEFAULT_INITIAL_RATE_BAND;
+  const initialOpponentRateBandForSelectedRule = initialMyRateBandForSelectedRule;
+  const historyRecordsInSelectedRule = useMemo(
+    () => historyRecords.filter((record) => record.rule === selectedRule.value),
+    [historyRecords, selectedRule.value]
+  );
 
   const myCharacterOptions = useMemo(
     () => sortCharacterOptions(buildUsageStats(historyRecords, "myCharacter")),
     [historyRecords]
   );
   const opponentCharacterOptions = useMemo(
-    () => sortCharacterOptions(buildUsageStats(historyRecords, "opponentCharacter")),
-    [historyRecords]
+    () => sortCharacterOptions(buildUsageStats(historyRecordsInSelectedRule, "opponentCharacter")),
+    [historyRecordsInSelectedRule]
   );
   const myPartnerCharacterOptions = useMemo(
     () => sortCharacterOptions(buildUsageStats(historyRecords, "myPartnerCharacter")),
@@ -447,8 +466,8 @@ function MatchRecordModal({
     [historyRecords]
   );
   const opponentRacketOptions = useMemo(
-    () => sortRacketOptions(buildUsageStats(historyRecords, "opponentRacket")),
-    [historyRecords]
+    () => sortRacketOptions(buildUsageStats(historyRecordsInSelectedRule, "opponentRacket")),
+    [historyRecordsInSelectedRule]
   );
   const myPartnerRacketOptions = useMemo(
     () => sortRacketOptions(buildUsageStats(historyRecords, "myPartnerRacket")),
@@ -465,7 +484,6 @@ function MatchRecordModal({
     return STAGE_OPTIONS;
   }, [values.stage]);
   const rateBandSelectOptions = useMemo(() => [...RATE_BAND_OPTIONS].reverse(), []);
-  const myRateBandIndex = RATE_BAND_OPTIONS.indexOf(values.myRateBand);
   const myRateValue = Number.parseInt(values.myRate, 10);
   const canDecreaseRate = Number.isNaN(myRateValue) ? false : myRateValue > 0;
   const isOpponentScoreSelected = (score: string) =>
@@ -494,6 +512,7 @@ function MatchRecordModal({
 
   useEffect(() => {
     if (!isOpen) {
+      createRateInitializedRuleRef.current = null;
       return;
     }
 
@@ -507,6 +526,41 @@ function MatchRecordModal({
 
   useEffect(() => {
     if (!isOpen || mode !== "create") {
+      createRateInitializedRuleRef.current = null;
+      return;
+    }
+
+    if (createRateInitializedRuleRef.current === selectedRule.value) {
+      return;
+    }
+    createRateInitializedRuleRef.current = selectedRule.value;
+
+    setValues((prev) => {
+      if (
+        prev.myRate === initialMyRateForSelectedRule &&
+        prev.myRateBand === initialMyRateBandForSelectedRule &&
+        prev.opponentRateBand === initialOpponentRateBandForSelectedRule
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        myRate: initialMyRateForSelectedRule,
+        myRateBand: initialMyRateBandForSelectedRule,
+        opponentRateBand: initialOpponentRateBandForSelectedRule
+      };
+    });
+  }, [
+    initialMyRateForSelectedRule,
+    initialMyRateBandForSelectedRule,
+    initialOpponentRateBandForSelectedRule,
+    isOpen,
+    mode,
+    selectedRule.value
+  ]);
+
+  useEffect(() => {
+    if (!isOpen || mode !== "create") {
       return;
     }
 
@@ -514,12 +568,14 @@ function MatchRecordModal({
     const firstOpponent = opponentCharacterOptions[0]?.value ?? CHARACTER_OPTIONS[0].value;
     const firstOpponentPartner =
       opponentPartnerCharacterOptions[0]?.value ?? CHARACTER_OPTIONS[0].value;
+    const firstOpponentRacket = opponentRacketOptions[0] ?? RACKET_OPTIONS[0];
 
     setValues((prev) => {
       if (
         prev.myPartnerCharacter === firstMyPartner &&
         prev.opponentCharacter === firstOpponent &&
-        prev.opponentPartnerCharacter === firstOpponentPartner
+        prev.opponentPartnerCharacter === firstOpponentPartner &&
+        prev.opponentRacket === firstOpponentRacket
       ) {
         return prev;
       }
@@ -528,7 +584,8 @@ function MatchRecordModal({
         ...prev,
         myPartnerCharacter: firstMyPartner,
         opponentCharacter: firstOpponent,
-        opponentPartnerCharacter: firstOpponentPartner
+        opponentPartnerCharacter: firstOpponentPartner,
+        opponentRacket: firstOpponentRacket
       };
     });
   }, [
@@ -536,7 +593,8 @@ function MatchRecordModal({
     mode,
     myPartnerCharacterOptions,
     opponentCharacterOptions,
-    opponentPartnerCharacterOptions
+    opponentPartnerCharacterOptions,
+    opponentRacketOptions
   ]);
 
   const modalTitle = mode === "create" ? "記録を登録" : "記録を編集";
@@ -867,32 +925,7 @@ function MatchRecordModal({
                       </MenuItem>
                     ))}
                   </TextField>
-                  {isDoubles && (
-                    <TextField
-                      select
-                      label="相手パートナーキャラ"
-                      value={values.opponentPartnerCharacter}
-                      onChange={(event) =>
-                        setValues((prev) => ({
-                          ...prev,
-                          opponentPartnerCharacter: event.target.value
-                        }))
-                      }
-                      size="small"
-                      required
-                      sx={fieldWidthSx.character}
-                    >
-                      {opponentPartnerCharacterOptions.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
-                          {option.label}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  )}
-                </Box>
-
-                {hasFeverRacket && (
-                  <Box sx={twoColSx}>
+                  {hasFeverRacket && (
                     <TextField
                       select
                       label="相手ラケット"
@@ -913,28 +946,73 @@ function MatchRecordModal({
                         </MenuItem>
                       ))}
                     </TextField>
-                    {isDoubles && (
-                      <TextField
-                        select
-                        label="相手パートナーラケット"
-                        value={values.opponentPartnerRacket}
-                        onChange={(event) =>
-                          setValues((prev) => ({
-                            ...prev,
-                            opponentPartnerRacket: event.target.value
-                          }))
-                        }
-                        size="small"
-                        required
-                        sx={fieldWidthSx.racket}
-                      >
-                        {opponentPartnerRacketOptions.map((option) => (
-                          <MenuItem key={option} value={option}>
-                            {option}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    )}
+                  )}
+                  {!hasFeverRacket && isDoubles && (
+                    <TextField
+                      select
+                      label="相手パートナーキャラ"
+                      value={values.opponentPartnerCharacter}
+                      onChange={(event) =>
+                        setValues((prev) => ({
+                          ...prev,
+                          opponentPartnerCharacter: event.target.value
+                        }))
+                      }
+                      size="small"
+                      required
+                      sx={fieldWidthSx.character}
+                    >
+                      {opponentPartnerCharacterOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  )}
+                </Box>
+
+                {hasFeverRacket && isDoubles && (
+                  <Box sx={twoColSx}>
+                    <TextField
+                      select
+                      label="相手パートナーキャラ"
+                      value={values.opponentPartnerCharacter}
+                      onChange={(event) =>
+                        setValues((prev) => ({
+                          ...prev,
+                          opponentPartnerCharacter: event.target.value
+                        }))
+                      }
+                      size="small"
+                      required
+                      sx={fieldWidthSx.character}
+                    >
+                      {opponentPartnerCharacterOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <TextField
+                      select
+                      label="相手パートナーラケット"
+                      value={values.opponentPartnerRacket}
+                      onChange={(event) =>
+                        setValues((prev) => ({
+                          ...prev,
+                          opponentPartnerRacket: event.target.value
+                        }))
+                      }
+                      size="small"
+                      required
+                      sx={fieldWidthSx.racket}
+                    >
+                      {opponentPartnerRacketOptions.map((option) => (
+                        <MenuItem key={option} value={option}>
+                          {option}
+                        </MenuItem>
+                      ))}
+                    </TextField>
                   </Box>
                 )}
 
@@ -1021,32 +1099,7 @@ function MatchRecordModal({
                       </MenuItem>
                     ))}
                   </TextField>
-                  {isDoubles && (
-                    <TextField
-                      select
-                      label="自分側パートナーキャラ"
-                      value={values.myPartnerCharacter}
-                      onChange={(event) =>
-                        setValues((prev) => ({
-                          ...prev,
-                          myPartnerCharacter: event.target.value
-                        }))
-                      }
-                      size="small"
-                      required
-                      sx={fieldWidthSx.character}
-                    >
-                      {myPartnerCharacterOptions.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
-                          {option.label}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  )}
-                </Box>
-
-                {hasFeverRacket && (
-                  <Box sx={twoColSx}>
+                  {hasFeverRacket && (
                     <TextField
                       select
                       label="自分ラケット"
@@ -1067,28 +1120,73 @@ function MatchRecordModal({
                         </MenuItem>
                       ))}
                     </TextField>
-                    {isDoubles && (
-                      <TextField
-                        select
-                        label="自分側パートナーラケット"
-                        value={values.myPartnerRacket}
-                        onChange={(event) =>
-                          setValues((prev) => ({
-                            ...prev,
-                            myPartnerRacket: event.target.value
-                          }))
-                        }
-                        size="small"
-                        required
-                        sx={fieldWidthSx.racket}
-                      >
-                        {myPartnerRacketOptions.map((option) => (
-                          <MenuItem key={option} value={option}>
-                            {option}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    )}
+                  )}
+                  {!hasFeverRacket && isDoubles && (
+                    <TextField
+                      select
+                      label="自分側パートナーキャラ"
+                      value={values.myPartnerCharacter}
+                      onChange={(event) =>
+                        setValues((prev) => ({
+                          ...prev,
+                          myPartnerCharacter: event.target.value
+                        }))
+                      }
+                      size="small"
+                      required
+                      sx={fieldWidthSx.character}
+                    >
+                      {myPartnerCharacterOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  )}
+                </Box>
+
+                {hasFeverRacket && isDoubles && (
+                  <Box sx={twoColSx}>
+                    <TextField
+                      select
+                      label="自分側パートナーキャラ"
+                      value={values.myPartnerCharacter}
+                      onChange={(event) =>
+                        setValues((prev) => ({
+                          ...prev,
+                          myPartnerCharacter: event.target.value
+                        }))
+                      }
+                      size="small"
+                      required
+                      sx={fieldWidthSx.character}
+                    >
+                      {myPartnerCharacterOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <TextField
+                      select
+                      label="自分側パートナーラケット"
+                      value={values.myPartnerRacket}
+                      onChange={(event) =>
+                        setValues((prev) => ({
+                          ...prev,
+                          myPartnerRacket: event.target.value
+                        }))
+                      }
+                      size="small"
+                      required
+                      sx={fieldWidthSx.racket}
+                    >
+                      {myPartnerRacketOptions.map((option) => (
+                        <MenuItem key={option} value={option}>
+                          {option}
+                        </MenuItem>
+                      ))}
+                    </TextField>
                   </Box>
                 )}
 
@@ -1185,138 +1283,99 @@ function MatchRecordModal({
                     </Stack>
                   </Box>
 
-                  <Box sx={rateControlSx}>
-                    <TextField
-                      label="レート"
-                      type="number"
-                      inputMode="numeric"
-                      inputProps={{ min: 0, step: 1 }}
-                      value={values.myRate}
-                      onChange={(event) =>
-                        setValues((prev) => ({
-                          ...prev,
-                          myRate: event.target.value
-                        }))
-                      }
-                      placeholder="例: 1540"
-                      size="small"
-                      required
-                      sx={{
-                        ...fieldWidthSx.rate,
-                        ...numberInputNoSpinnerSx,
-                        "& .MuiInputBase-input": {
-                          textAlign: "right"
-                        }
-                      }}
-                    />
-                    <Box sx={rateStepButtonsSx}>
-                      <IconButton
-                        size="small"
-                        aria-label="レートを5下げる"
-                        onClick={() =>
+                  <Box sx={resultRightColumnSx}>
+                    <Box sx={rateControlSx}>
+                      <TextField
+                        label="レート"
+                        type="number"
+                        inputMode="numeric"
+                        inputProps={{ min: 0, step: 1 }}
+                        value={values.myRate}
+                        onChange={(event) =>
                           setValues((prev) => ({
                             ...prev,
-                            myRate: shiftRateValue(prev.myRate, -5)
+                            myRate: event.target.value
                           }))
                         }
-                        disabled={!canDecreaseRate}
-                        sx={{ width: 28, height: 28, fontSize: "0.8rem", fontWeight: 700, lineHeight: 1 }}
-                      >
-                        -5
-                      </IconButton>
-                      <IconButton
+                        placeholder="例: 1540"
                         size="small"
-                        aria-label="レートを1下げる"
-                        onClick={() =>
-                          setValues((prev) => ({
-                            ...prev,
-                            myRate: shiftRateValue(prev.myRate, -1)
-                          }))
-                        }
-                        disabled={!canDecreaseRate}
-                        sx={{ width: 28, height: 28, fontSize: "0.8rem", fontWeight: 700, lineHeight: 1 }}
-                      >
-                        -1
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        aria-label="レートを1上げる"
-                        onClick={() =>
-                          setValues((prev) => ({
-                            ...prev,
-                            myRate: shiftRateValue(prev.myRate, 1)
-                          }))
-                        }
-                        sx={{ width: 28, height: 28, fontSize: "0.8rem", fontWeight: 700, lineHeight: 1 }}
-                      >
-                        +1
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        aria-label="レートを5上げる"
-                        onClick={() =>
-                          setValues((prev) => ({
-                            ...prev,
-                            myRate: shiftRateValue(prev.myRate, 5)
-                          }))
-                        }
-                        sx={{ width: 28, height: 28, fontSize: "0.8rem", fontWeight: 700, lineHeight: 1 }}
-                      >
-                        +5
-                      </IconButton>
+                        required
+                        sx={{
+                          ...fieldWidthSx.rate,
+                          ...numberInputNoSpinnerSx,
+                          "& .MuiInputBase-input": {
+                            textAlign: "right"
+                          }
+                        }}
+                      />
+                      <Box sx={rateStepButtonsSx}>
+                        <IconButton
+                          size="small"
+                          aria-label="レートを5下げる"
+                          onClick={() =>
+                            setValues((prev) => ({
+                              ...prev,
+                              myRate: shiftRateValue(prev.myRate, -5)
+                            }))
+                          }
+                          disabled={!canDecreaseRate}
+                          sx={{ width: 28, height: 28, fontSize: "0.8rem", fontWeight: 700, lineHeight: 1 }}
+                        >
+                          -5
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          aria-label="レートを1下げる"
+                          onClick={() =>
+                            setValues((prev) => ({
+                              ...prev,
+                              myRate: shiftRateValue(prev.myRate, -1)
+                            }))
+                          }
+                          disabled={!canDecreaseRate}
+                          sx={{ width: 28, height: 28, fontSize: "0.8rem", fontWeight: 700, lineHeight: 1 }}
+                        >
+                          -1
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          aria-label="レートを1上げる"
+                          onClick={() =>
+                            setValues((prev) => ({
+                              ...prev,
+                              myRate: shiftRateValue(prev.myRate, 1)
+                            }))
+                          }
+                          sx={{ width: 28, height: 28, fontSize: "0.8rem", fontWeight: 700, lineHeight: 1 }}
+                        >
+                          +1
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          aria-label="レートを5上げる"
+                          onClick={() =>
+                            setValues((prev) => ({
+                              ...prev,
+                              myRate: shiftRateValue(prev.myRate, 5)
+                            }))
+                          }
+                          sx={{ width: 28, height: 28, fontSize: "0.8rem", fontWeight: 700, lineHeight: 1 }}
+                        >
+                          +5
+                        </IconButton>
+                      </Box>
                     </Box>
-                  </Box>
 
-                  <Box sx={rateBandControlSx}>
-                    <TextField
-                      select
-                      label="自分のレート帯"
-                      value={values.myRateBand}
-                      onChange={(event) =>
+                    <Box sx={opponentRateBandSelectorSx}>
+                      <Typography variant="body2" sx={rateBandFieldLabelSx}>
+                        自分のレート帯
+                      </Typography>
+                      {renderRateBandButtons("自分のレート帯", values.myRateBand, (option) =>
                         setValues((prev) => ({
                           ...prev,
-                          myRateBand: event.target.value
+                          myRateBand: option
                         }))
-                      }
-                      size="small"
-                      required
-                      sx={fieldWidthSx.rateBand}
-                    >
-                      {rateBandSelectOptions.map((option) => (
-                        <MenuItem key={option} value={option}>
-                          {option}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                    <Box sx={rateBandButtonsSx}>
-                      <IconButton
-                        size="small"
-                        aria-label="自分のレート帯を下げる"
-                        onClick={() =>
-                          setValues((prev) => ({
-                            ...prev,
-                            myRateBand: shiftRateBand(prev.myRateBand, -1)
-                          }))
-                        }
-                        disabled={myRateBandIndex <= 0}
-                        sx={{ width: 28, height: 28 }}
-                      >
-                        <KeyboardArrowDownIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        aria-label="自分のレート帯を上げる"
-                        onClick={() =>
-                          setValues((prev) => ({
-                            ...prev,
-                            myRateBand: shiftRateBand(prev.myRateBand, 1)
-                          }))
-                        }
-                        disabled={myRateBandIndex >= RATE_BAND_OPTIONS.length - 1}
-                        sx={{ width: 28, height: 28 }}
-                      >
-                        <KeyboardArrowUpIcon fontSize="small" />
-                      </IconButton>
+                      )}
                     </Box>
                   </Box>
                 </Box>
