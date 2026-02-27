@@ -175,6 +175,27 @@ body {
   flex-wrap: wrap;
 }
 
+.summary-view-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+}
+
+.summary-win-rate-option {
+  margin: 0 !important;
+}
+
+.summary-win-rate-option .MuiCheckbox-root {
+  padding: 3px;
+}
+
+.summary-win-rate-option .MuiFormControlLabel-label {
+  color: #7b8d99;
+  font-size: 0.77rem;
+  font-weight: 400;
+}
+
 .summary-view-button {
   border: 1px solid #c8d4dd;
   border-radius: 8px;
@@ -232,27 +253,60 @@ body {
   margin-top: 0;
 }
 
-.summary-rate-overview-grid {
+.summary-rate-layout {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 0.8rem;
+  align-items: stretch;
+}
+
+.summary-rate-overview-stack {
+  display: grid;
   gap: 0.65rem;
-  margin-bottom: 0.8rem;
+  align-content: start;
+  width: max-content;
 }
 
 .summary-rate-overview-card {
-  padding: 0.65rem 0.75rem;
+  padding: 0.5rem 0.58rem;
+  width: max-content;
+  background: var(--surface-level-3);
+  border-color: #d8e4ec;
 }
 
 .summary-rate-overview-rule {
-  margin: 0 0 0.4rem;
-  color: #324957;
-  font-size: 0.76rem;
-  font-weight: 700;
+  margin: 0 0 0.08rem;
+  color: #758895;
+  font-size: 0.68rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.summary-rate-overview-fever-grid {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.summary-rate-overview-fever-block {
+  border: 1px solid #dce6ee;
+  border-radius: 8px;
+  background: var(--surface-level-1);
+  padding: 0.4rem 0.5rem;
+  box-shadow: 0 1px 0 rgba(25, 54, 78, 0.04);
+}
+
+.summary-rate-overview-fever-label {
+  margin: 0 0 0.18rem;
+  color: #4a6172;
+  font-size: 0.68rem;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .summary-rate-overview-rule-line {
   display: block;
   line-height: 1.25;
+  white-space: nowrap;
 }
 
 .summary-rate-overview-line {
@@ -263,6 +317,13 @@ body {
   gap: 0.5rem;
   color: #4e6372;
   font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.summary-rate-with-band {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .summary-rate-overview-line strong {
@@ -281,6 +342,17 @@ body {
   gap: 0.8rem;
 }
 
+.summary-win-racket-grid {
+  margin-top: 0.8rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.8rem;
+}
+
+.summary-win-stage-section {
+  margin-top: 0.8rem;
+}
+
 .summary-win-left-stack {
   display: grid;
   gap: 0.8rem;
@@ -293,8 +365,15 @@ body {
   gap: 0.8rem;
 }
 
+.summary-usage-section + .summary-usage-section {
+  margin-top: 0.8rem;
+}
+
 .summary-trend-card {
   margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .summary-trend-header {
@@ -327,11 +406,15 @@ body {
 
 .rate-stock-chart-wrap {
   margin-top: 0.55rem;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .rate-stock-chart {
   width: 100%;
-  height: 420px;
+  height: 100%;
   border: 1px solid #d7e2ea;
   border-radius: 8px;
   background: #fff;
@@ -356,6 +439,18 @@ body {
   gap: 0.5rem;
 }
 
+.rate-band-toggle-row {
+  display: flex;
+  justify-content: center;
+  margin-top: -0.05rem;
+}
+
+.rate-band-toggle-button {
+  width: 100%;
+  border-radius: 999px !important;
+  color: #45647a;
+}
+
 .rate-band-row {
   display: grid;
   grid-template-columns: 1.8rem 3.2rem minmax(0, 1fr) max-content;
@@ -371,12 +466,31 @@ body {
   grid-template-columns: 5.9rem 3.2rem minmax(0, 1fr) max-content;
 }
 
+.rate-band-row-racket {
+  --racket-label-col: 9rem;
+  --racket-rate-col: 4.4ch;
+  grid-template-columns: var(--racket-label-col) var(--racket-rate-col) minmax(0, 1fr) max-content;
+}
+
+.rate-band-row-stage {
+  --stage-label-col: 9rem;
+  grid-template-columns: var(--stage-label-col) 3.2rem minmax(0, 1fr) max-content;
+}
+
 .rate-band-row-overlay {
   grid-template-columns: 1.8rem 3.2rem minmax(0, 1fr);
 }
 
 .rate-band-row-overlay.rate-band-row-character {
   grid-template-columns: 5.9rem 3.2rem minmax(0, 1fr);
+}
+
+.rate-band-row-overlay.rate-band-row-racket {
+  grid-template-columns: var(--racket-label-col) var(--racket-rate-col) minmax(0, 1fr);
+}
+
+.rate-band-row-overlay.rate-band-row-stage {
+  grid-template-columns: var(--stage-label-col) 3.2rem minmax(0, 1fr);
 }
 
 .rate-band-label {
@@ -392,6 +506,16 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.rate-band-label-racket {
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.rate-band-label-stage {
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .rate-band-track {
@@ -782,9 +906,15 @@ body {
   }
 
   .summary-win-grid,
-  .summary-rate-overview-grid,
+  .summary-win-racket-grid,
+  .summary-rate-layout,
   .summary-usage-grid {
     grid-template-columns: 1fr;
+  }
+
+  .summary-rate-overview-stack,
+  .summary-rate-overview-card {
+    width: 100%;
   }
 
   .record-list-header {
