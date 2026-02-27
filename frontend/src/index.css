@@ -46,11 +46,24 @@ body {
 
 .app-title {
   display: inline-flex;
-  align-items: baseline;
-  gap: 0.4rem;
+  align-items: center;
+  gap: 0.36rem;
+  font-weight: 600;
+}
+
+.app-title-icon {
+  color: #466375;
+  flex-shrink: 0;
+  font-size: 1em !important;
+}
+
+.app-title-text {
+  line-height: 1.1;
+  color: #365365;
 }
 
 .app-version {
+  margin-left: 0.52rem;
   font-size: 0.72rem;
   font-weight: 500;
   color: #8193a0;

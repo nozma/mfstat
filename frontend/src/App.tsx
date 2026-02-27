@@ -19,6 +19,7 @@ import {
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import SportsTennisIcon from "@mui/icons-material/SportsTennis";
 import {
   DataGrid,
   GridCellParams,
@@ -1885,7 +1886,8 @@ function App() {
     <main className="app">
       <header className="page-header">
         <h1 className="app-title">
-          MFStat
+          <SportsTennisIcon className="app-title-icon" />
+          <span className="app-title-text">MFStat</span>
           <span className="app-version">{versionLabel}</span>
         </h1>
         <div className="page-header-actions">
