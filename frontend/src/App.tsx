@@ -118,7 +118,10 @@ const displayResultLabel = (value: string) => {
   }
   return value;
 };
-const formatPercent = (value: number) => `${Math.round(value)}%`;
+const formatPercent = (value: number) => {
+  const formatted = value.toFixed(1);
+  return formatted === "100.0" ? "100%" : `${formatted}%`;
+};
 const renderRateWithBand = (rate: number | null, rateBand: string | null) => {
   if (rate === null) {
     return "-";
@@ -2394,7 +2397,7 @@ function App() {
                               </p>
                               <p className="summary-rate-overview-line">
                                 <span>勝率</span>
-                                <strong>{item.winRate === null ? "-" : `${item.winRate.toFixed(1)}%`}</strong>
+                                <strong>{item.winRate === null ? "-" : formatPercent(item.winRate)}</strong>
                               </p>
                             </div>
                           ))}
@@ -2412,7 +2415,7 @@ function App() {
                     <div className="summary-card">
                       <p className="summary-label">合計勝率</p>
                       <p className="summary-value">
-                        {summary.winRate === null ? "-" : `${summary.winRate.toFixed(1)}%`}
+                        {summary.winRate === null ? "-" : formatPercent(summary.winRate)}
                       </p>
                       <p className="summary-sub">
                         {summary.total === 0
