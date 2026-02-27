@@ -3,6 +3,7 @@ import {
   Box,
   Checkbox,
   Chip,
+  FormControlLabel,
   FormControl,
   IconButton,
   InputLabel,
@@ -18,6 +19,8 @@ import {
 } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SportsTennisIcon from "@mui/icons-material/SportsTennis";
 import {
@@ -55,6 +58,7 @@ const COLUMN_VISIBILITY_STORAGE_KEY = "mfstat.recordGrid.columnVisibility";
 const COLUMN_ORDER_STORAGE_KEY = "mfstat.recordGrid.columnOrder";
 const RATE_TREND_VIEW_MODE_STORAGE_KEY = "mfstat.rateTrend.viewMode";
 const RATE_TREND_RULE_STORAGE_KEY = "mfstat.rateTrend.rule";
+const WIN_RATE_MIN_MATCHES_ONLY_STORAGE_KEY = "mfstat.summary.winRate.minMatchesOnly";
 type DateFilterPreset = "all" | "last30" | "custom";
 type SummaryViewMode = "rate" | "winRate" | "usage";
 type FilterFieldKey =
@@ -65,6 +69,14 @@ type FilterFieldKey =
   | "opponentCharacter"
   | "opponentRacket"
   | "opponentRateBand";
+type ExpandableRateListKey =
+  | "winRateCharacter"
+  | "winRateRacket"
+  | "usageCharacter"
+  | "usageRacket";
+
+const RATE_BAND_COLLAPSE_ROW_COUNT = 13;
+const WIN_RATE_MIN_MATCH_COUNT = 5;
 
 const pad2 = (value: number) => value.toString().padStart(2, "0");
 
@@ -107,12 +119,30 @@ const displayResultLabel = (value: string) => {
   return value;
 };
 const formatPercent = (value: number) => `${Math.round(value)}%`;
-const formatRateWithBand = (rate: number | null, rateBand: string | null) => {
+const renderRateWithBand = (rate: number | null, rateBand: string | null) => {
   if (rate === null) {
     return "-";
   }
+
   const trimmedRateBand = (rateBand ?? "").trim();
-  return trimmedRateBand.length > 0 ? `${trimmedRateBand} ${rate}` : String(rate);
+  return (
+    <span className="summary-rate-with-band">
+      {trimmedRateBand.length > 0 ? (
+        <Chip
+          size="small"
+          variant="outlined"
+          color="default"
+          label={trimmedRateBand}
+          sx={{
+            ...rateBandChipSx,
+            ...compactRateBandChipSx,
+            ...getRateBandChipToneSx(trimmedRateBand)
+          }}
+        />
+      ) : null}
+      <strong>{rate}</strong>
+    </span>
+  );
 };
 
 const DatetimeEditCell = (params: GridRenderEditCellParams<MatchRecord, string>) => {
@@ -245,6 +275,14 @@ const rateBandChipSx = {
   fontWeight: 700,
   fontSize: "0.72rem",
   "& .MuiChip-label": { px: 0.8 }
+} as const;
+const compactRateBandChipSx = {
+  minWidth: "2.2rem",
+  width: "2.2rem",
+  height: 16,
+  fontWeight: 700,
+  fontSize: "0.62rem",
+  "& .MuiChip-label": { px: 0.45 }
 } as const;
 
 const getRateBandChipToneSx = (rateBand: string) => {
@@ -392,6 +430,18 @@ function App() {
   const [selectedOpponentRateBands, setSelectedOpponentRateBands] = useState<string[]>([]);
   const [dateFilterPreset, setDateFilterPreset] = useState<DateFilterPreset>("all");
   const [summaryViewMode, setSummaryViewMode] = useState<SummaryViewMode>("rate");
+  const [showOnlyMinMatchesWinRateStats, setShowOnlyMinMatchesWinRateStats] = useState<boolean>(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return window.localStorage.getItem(WIN_RATE_MIN_MATCHES_ONLY_STORAGE_KEY) === "true";
+  });
+  const [expandedRateLists, setExpandedRateLists] = useState<Record<ExpandableRateListKey, boolean>>({
+    winRateCharacter: false,
+    winRateRacket: false,
+    usageCharacter: false,
+    usageRacket: false
+  });
   const [rateTrendViewMode, setRateTrendViewMode] = useState<RateTrendViewMode>(() => {
     if (typeof window === "undefined") {
       return "line";
@@ -554,6 +604,12 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(RATE_TREND_RULE_STORAGE_KEY, selectedTrendRule);
   }, [selectedTrendRule]);
+  useEffect(() => {
+    window.localStorage.setItem(
+      WIN_RATE_MIN_MATCHES_ONLY_STORAGE_KEY,
+      showOnlyMinMatchesWinRateStats ? "true" : "false"
+    );
+  }, [showOnlyMinMatchesWinRateStats]);
 
   const openCreateModal = () => {
     setEditingRecordId(null);
@@ -990,6 +1046,34 @@ function App() {
       })
       .filter((item) => item.total > 0);
   }, [filteredRecords]);
+  const stageWinStats = useMemo(() => {
+    const statsByStage = new Map<string, { total: number; wins: number }>();
+
+    filteredRecords.forEach((record) => {
+      const current = statsByStage.get(record.stage) ?? { total: 0, wins: 0 };
+      current.total += 1;
+      if (record.result === "WIN") {
+        current.wins += 1;
+      }
+      statsByStage.set(record.stage, current);
+    });
+
+    return Array.from(statsByStage.entries())
+      .map(([stage, stats]) => ({
+        stage,
+        label: stage,
+        total: stats.total,
+        wins: stats.wins,
+        winRate: (stats.wins / stats.total) * 100
+      }))
+      .sort((left, right) => {
+        const winRateDiff = right.winRate - left.winRate;
+        if (winRateDiff !== 0) {
+          return winRateDiff;
+        }
+        return left.label.localeCompare(right.label, "ja");
+      });
+  }, [filteredRecords]);
   const myCharacterWinStats = useMemo(() => {
     const statsByCharacter = new Map<string, { total: number; wins: number }>();
 
@@ -1046,6 +1130,84 @@ function App() {
         return left.label.localeCompare(right.label, "ja");
       });
   }, [characterLabelByValue, filteredRecords]);
+  const myRacketWinStats = useMemo(() => {
+    const statsByRacket = new Map<string, { total: number; wins: number }>();
+
+    filteredRecords.forEach((record) => {
+      const racket = record.myRacket.trim();
+      if (racket.length === 0) {
+        return;
+      }
+
+      const current = statsByRacket.get(racket) ?? { total: 0, wins: 0 };
+      current.total += 1;
+      if (record.result === "WIN") {
+        current.wins += 1;
+      }
+      statsByRacket.set(racket, current);
+    });
+
+    return Array.from(statsByRacket.entries())
+      .map(([racket, stats]) => ({
+        racket,
+        label: racket,
+        total: stats.total,
+        wins: stats.wins,
+        winRate: (stats.wins / stats.total) * 100
+      }))
+      .sort((left, right) => {
+        const winRateDiff = right.winRate - left.winRate;
+        if (winRateDiff !== 0) {
+          return winRateDiff;
+        }
+        return left.label.localeCompare(right.label, "ja");
+      });
+  }, [filteredRecords]);
+  const opponentRacketWinStats = useMemo(() => {
+    const statsByRacket = new Map<string, { total: number; wins: number }>();
+
+    filteredRecords.forEach((record) => {
+      const racket = record.opponentRacket.trim();
+      if (racket.length === 0) {
+        return;
+      }
+
+      const current = statsByRacket.get(racket) ?? { total: 0, wins: 0 };
+      current.total += 1;
+      if (record.result === "WIN") {
+        current.wins += 1;
+      }
+      statsByRacket.set(racket, current);
+    });
+
+    return Array.from(statsByRacket.entries())
+      .map(([racket, stats]) => ({
+        racket,
+        label: racket,
+        total: stats.total,
+        wins: stats.wins,
+        winRate: (stats.wins / stats.total) * 100
+      }))
+      .sort((left, right) => {
+        const winRateDiff = right.winRate - left.winRate;
+        if (winRateDiff !== 0) {
+          return winRateDiff;
+        }
+        return left.label.localeCompare(right.label, "ja");
+      });
+  }, [filteredRecords]);
+  const filterWinRateStatsByMinMatches = <T extends { total: number }>(items: T[]) => {
+    if (!showOnlyMinMatchesWinRateStats) {
+      return items;
+    }
+    return items.filter((item) => item.total >= WIN_RATE_MIN_MATCH_COUNT);
+  };
+  const visibleOpponentRateBandWinStats = filterWinRateStatsByMinMatches(opponentRateBandWinStats);
+  const visibleStageWinStats = filterWinRateStatsByMinMatches(stageWinStats);
+  const visibleMyCharacterWinStats = filterWinRateStatsByMinMatches(myCharacterWinStats);
+  const visibleOpponentCharacterWinStats = filterWinRateStatsByMinMatches(opponentCharacterWinStats);
+  const visibleMyRacketWinStats = filterWinRateStatsByMinMatches(myRacketWinStats);
+  const visibleOpponentRacketWinStats = filterWinRateStatsByMinMatches(opponentRacketWinStats);
   const opponentCharacterUsageStats = useMemo(() => {
     const totalMatches = filteredRecords.length;
     if (totalMatches === 0) {
@@ -1098,6 +1260,84 @@ function App() {
         return left.label.localeCompare(right.label, "ja");
       });
   }, [characterLabelByValue, filteredRecords]);
+  const myRacketUsageStats = useMemo(() => {
+    const recordsWithRacket = filteredRecords.filter((record) => record.myRacket.trim().length > 0);
+    const totalMatches = recordsWithRacket.length;
+    if (totalMatches === 0) {
+      return [];
+    }
+
+    const countByRacket = new Map<string, number>();
+    recordsWithRacket.forEach((record) => {
+      incrementCount(countByRacket, record.myRacket);
+    });
+
+    return Array.from(countByRacket.entries())
+      .map(([racket, count]) => ({
+        racket,
+        label: racket,
+        count,
+        usageRate: (count / totalMatches) * 100
+      }))
+      .sort((left, right) => {
+        const usageRateDiff = right.usageRate - left.usageRate;
+        if (usageRateDiff !== 0) {
+          return usageRateDiff;
+        }
+        return left.label.localeCompare(right.label, "ja");
+      });
+  }, [filteredRecords]);
+  const opponentRacketUsageStats = useMemo(() => {
+    const recordsWithRacket = filteredRecords.filter((record) => record.opponentRacket.trim().length > 0);
+    const totalMatches = recordsWithRacket.length;
+    if (totalMatches === 0) {
+      return [];
+    }
+
+    const countByRacket = new Map<string, number>();
+    recordsWithRacket.forEach((record) => {
+      incrementCount(countByRacket, record.opponentRacket);
+    });
+
+    return Array.from(countByRacket.entries())
+      .map(([racket, count]) => ({
+        racket,
+        label: racket,
+        count,
+        usageRate: (count / totalMatches) * 100
+      }))
+      .sort((left, right) => {
+        const usageRateDiff = right.usageRate - left.usageRate;
+        if (usageRateDiff !== 0) {
+          return usageRateDiff;
+        }
+        return left.label.localeCompare(right.label, "ja");
+      });
+  }, [filteredRecords]);
+  const getVisibleRateList = <T,>(items: T[], key: ExpandableRateListKey) =>
+    expandedRateLists[key] ? items : items.slice(0, RATE_BAND_COLLAPSE_ROW_COUNT);
+  const toggleRateListExpanded = (key: ExpandableRateListKey) => {
+    setExpandedRateLists((current) => ({ ...current, [key]: !current[key] }));
+  };
+  const renderRateListToggle = (key: ExpandableRateListKey, itemCount: number) => {
+    if (itemCount <= RATE_BAND_COLLAPSE_ROW_COUNT) {
+      return null;
+    }
+
+    const isExpanded = expandedRateLists[key];
+    return (
+      <div className="rate-band-toggle-row">
+        <IconButton
+          size="small"
+          className="rate-band-toggle-button"
+          onClick={() => toggleRateListExpanded(key)}
+          aria-label={isExpanded ? "リストを折りたたむ" : "リストを展開する"}
+        >
+          {isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+        </IconButton>
+      </div>
+    );
+  };
   const rateTrendSeries = useMemo<RateTrendLineSeries[]>(() => {
     const samples = records
       .map((record) => ({
@@ -1283,8 +1523,11 @@ function App() {
   const ruleRateOverviewStats = useMemo(
     () =>
       RULE_OPTIONS.map((option) => {
-        const samples = records
-          .filter((record) => record.rule === option.value)
+        const recordsInRule = records.filter((record) => record.rule === option.value);
+        const totalMatches = recordsInRule.length;
+        const winCount = recordsInRule.filter((record) => record.result === "WIN").length;
+        const winRate = totalMatches > 0 ? (winCount / totalMatches) * 100 : null;
+        const samples = recordsInRule
           .map((record) => {
             const rate = Number(record.myRate);
             const playedAtTimestamp = parsePlayedAtTimestamp(record.playedAt);
@@ -1315,12 +1558,17 @@ function App() {
         if (samples.length === 0) {
           return {
             rule: option.value,
+            isDoubles: option.isDoubles,
+            hasFeverRacket: option.hasFeverRacket,
             ruleTypeLabel: option.isDoubles ? "ダブルス" : "シングルス",
             feverLabel: `フィーバーラケット${option.hasFeverRacket ? "あり" : "なし"}`,
             currentRate: null as number | null,
             currentRateBand: null as string | null,
             maxRate: null as number | null,
-            maxRateBand: null as string | null
+            maxRateBand: null as string | null,
+            winRate,
+            winCount,
+            totalMatches
           };
         }
 
@@ -1331,15 +1579,34 @@ function App() {
           .find((sample) => sample.rate === maxRate) ?? null;
         return {
           rule: option.value,
+          isDoubles: option.isDoubles,
+          hasFeverRacket: option.hasFeverRacket,
           ruleTypeLabel: option.isDoubles ? "ダブルス" : "シングルス",
           feverLabel: `フィーバーラケット${option.hasFeverRacket ? "あり" : "なし"}`,
           currentRate: latest.rate,
           currentRateBand: latest.rateBand,
           maxRate,
-          maxRateBand: maxRateSample?.rateBand ?? null
+          maxRateBand: maxRateSample?.rateBand ?? null,
+          winRate,
+          winCount,
+          totalMatches
         };
       }),
     [records]
+  );
+  const groupedRuleRateOverviewStats = useMemo(
+    () =>
+      [
+        { key: "singles", ruleTypeLabel: "シングルス", isDoubles: false },
+        { key: "doubles", ruleTypeLabel: "ダブルス", isDoubles: true }
+      ].map((group) => ({
+        key: group.key,
+        ruleTypeLabel: group.ruleTypeLabel,
+        feverItems: ruleRateOverviewStats
+          .filter((item) => item.isDoubles === group.isDoubles)
+          .sort((left, right) => Number(right.hasFeverRacket) - Number(left.hasFeverRacket))
+      })),
+    [ruleRateOverviewStats]
   );
   const resetFilters = () => {
     setSelectedRules([]);
@@ -2007,104 +2274,134 @@ function App() {
           <section className="summary-section">
             <div className="summary-header">
               <h2>集計</h2>
-              <div className="summary-view-switcher" aria-label="集計表示切替">
-                <button
-                  type="button"
-                  className={`summary-view-button${summaryViewMode === "rate" ? " is-active" : ""}`}
-                  onClick={() => setSummaryViewMode("rate")}
-                  aria-pressed={summaryViewMode === "rate"}
-                >
-                  レート
-                </button>
-                <button
-                  type="button"
-                  className={`summary-view-button${summaryViewMode === "winRate" ? " is-active" : ""}`}
-                  onClick={() => setSummaryViewMode("winRate")}
-                  aria-pressed={summaryViewMode === "winRate"}
-                >
-                  勝率
-                </button>
-                <button
-                  type="button"
-                  className={`summary-view-button${summaryViewMode === "usage" ? " is-active" : ""}`}
-                  onClick={() => setSummaryViewMode("usage")}
-                  aria-pressed={summaryViewMode === "usage"}
-                >
-                  使用率
-                </button>
+              <div className="summary-view-controls">
+                <div className="summary-view-switcher" aria-label="集計表示切替">
+                  <button
+                    type="button"
+                    className={`summary-view-button${summaryViewMode === "rate" ? " is-active" : ""}`}
+                    onClick={() => setSummaryViewMode("rate")}
+                    aria-pressed={summaryViewMode === "rate"}
+                  >
+                    レート
+                  </button>
+                  <button
+                    type="button"
+                    className={`summary-view-button${summaryViewMode === "winRate" ? " is-active" : ""}`}
+                    onClick={() => setSummaryViewMode("winRate")}
+                    aria-pressed={summaryViewMode === "winRate"}
+                  >
+                    勝率
+                  </button>
+                  <button
+                    type="button"
+                    className={`summary-view-button${summaryViewMode === "usage" ? " is-active" : ""}`}
+                    onClick={() => setSummaryViewMode("usage")}
+                    aria-pressed={summaryViewMode === "usage"}
+                  >
+                    使用率
+                  </button>
+                </div>
+                {summaryViewMode === "winRate" && (
+                  <FormControlLabel
+                    className="summary-win-rate-option"
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={showOnlyMinMatchesWinRateStats}
+                        onChange={(event) => setShowOnlyMinMatchesWinRateStats(event.target.checked)}
+                      />
+                    }
+                    label={`${WIN_RATE_MIN_MATCH_COUNT}回以上の戦歴がある項目のみ`}
+                  />
+                )}
               </div>
             </div>
             {summaryViewMode === "rate" && (
               <div className="summary-subsection">
-                <div className="summary-rate-overview-grid">
-                  {ruleRateOverviewStats.map((item) => (
-                    <div key={`rate-overview-${item.rule}`} className="summary-card summary-rate-overview-card">
-                      <p className="summary-rate-overview-rule">
-                        <span className="summary-rate-overview-rule-line">{item.ruleTypeLabel}</span>
-                        <span className="summary-rate-overview-rule-line">{item.feverLabel}</span>
-                      </p>
-                      <p className="summary-rate-overview-line">
-                        <span>現在</span>
-                        <strong>{formatRateWithBand(item.currentRate, item.currentRateBand)}</strong>
-                      </p>
-                      <p className="summary-rate-overview-line">
-                        <span>最大</span>
-                        <strong>{formatRateWithBand(item.maxRate, item.maxRateBand)}</strong>
-                      </p>
+                <div className="summary-rate-layout">
+                  <div className="summary-card summary-trend-card">
+                    <div className="summary-trend-header">
+                      <p className="summary-label">レート推移</p>
+                      <div className="summary-trend-header-controls">
+                        {rateTrendViewMode === "candlestick" && (
+                          <FormControl size="small" className="rate-trend-rule-select">
+                            <InputLabel id="trend-rule-select-label">集計ルール</InputLabel>
+                            <Select<MatchRecordValues["rule"]>
+                              labelId="trend-rule-select-label"
+                              value={selectedTrendRule}
+                              label="集計ルール"
+                              onChange={(event) =>
+                                setSelectedTrendRule(event.target.value as MatchRecordValues["rule"])
+                              }
+                            >
+                              {RULE_OPTIONS.map((rule) => (
+                                <MenuItem key={`trend-rule-${rule.value}`} value={rule.value}>
+                                  {rule.label}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        )}
+                        <RateTrendViewSwitcher
+                          value={rateTrendViewMode}
+                          onChange={setRateTrendViewMode}
+                        />
+                      </div>
                     </div>
-                  ))}
-                </div>
-                <div className="summary-card summary-trend-card">
-                  <div className="summary-trend-header">
-                    <p className="summary-label">レート推移</p>
-                    <div className="summary-trend-header-controls">
-                      {rateTrendViewMode === "candlestick" && (
-                        <FormControl size="small" className="rate-trend-rule-select">
-                          <InputLabel id="trend-rule-select-label">集計ルール</InputLabel>
-                          <Select<MatchRecordValues["rule"]>
-                            labelId="trend-rule-select-label"
-                            value={selectedTrendRule}
-                            label="集計ルール"
-                            onChange={(event) =>
-                              setSelectedTrendRule(event.target.value as MatchRecordValues["rule"])
-                            }
-                          >
-                            {RULE_OPTIONS.map((rule) => (
-                              <MenuItem key={`trend-rule-${rule.value}`} value={rule.value}>
-                                {rule.label}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                      )}
-                      <RateTrendViewSwitcher
-                        value={rateTrendViewMode}
-                        onChange={setRateTrendViewMode}
-                      />
-                    </div>
-                  </div>
-                  {rateTrendViewMode === "candlestick" ? (
-                    dailyRateCandles.length === 0 ? (
-                      <p className="summary-sub rate-trend-placeholder">
-                        選択したルールの対象レコードなし
-                      </p>
-                    ) : (
-                      <RateTrendStockChart
-                        candles={dailyRateCandles}
-                        ruleLabel={ruleLabelByValue[selectedTrendRule]}
-                      />
-                    )
-                  ) : rateTrendViewMode === "step" ? (
-                    rateTrendStepSeries.length === 0 ? (
+                    {rateTrendViewMode === "candlestick" ? (
+                      dailyRateCandles.length === 0 ? (
+                        <p className="summary-sub rate-trend-placeholder">
+                          選択したルールの対象レコードなし
+                        </p>
+                      ) : (
+                        <RateTrendStockChart
+                          candles={dailyRateCandles}
+                          ruleLabel={ruleLabelByValue[selectedTrendRule]}
+                        />
+                      )
+                    ) : rateTrendViewMode === "step" ? (
+                      rateTrendStepSeries.length === 0 ? (
+                        <p className="summary-sub">対象レコードなし</p>
+                      ) : (
+                        <RateTrendStepChart series={rateTrendStepSeries} />
+                      )
+                    ) : rateTrendSeries.length === 0 ? (
                       <p className="summary-sub">対象レコードなし</p>
                     ) : (
-                      <RateTrendStepChart series={rateTrendStepSeries} />
-                    )
-                  ) : rateTrendSeries.length === 0 ? (
-                    <p className="summary-sub">対象レコードなし</p>
-                  ) : (
-                    <RateTrendLineChart series={rateTrendSeries} />
-                  )}
+                      <RateTrendLineChart series={rateTrendSeries} />
+                    )}
+                  </div>
+                  <div className="summary-rate-overview-stack">
+                    {groupedRuleRateOverviewStats.map((group) => (
+                      <div key={`rate-overview-group-${group.key}`} className="summary-card summary-rate-overview-card">
+                        <p className="summary-rate-overview-rule">
+                          {group.ruleTypeLabel}
+                        </p>
+                        <div className="summary-rate-overview-fever-grid">
+                          {group.feverItems.map((item) => (
+                            <div
+                              key={`rate-overview-${item.rule}`}
+                              className="summary-rate-overview-fever-block"
+                            >
+                              <p className="summary-rate-overview-fever-label">{item.feverLabel}</p>
+                              <p className="summary-rate-overview-line">
+                                <span>現在</span>
+                                {renderRateWithBand(item.currentRate, item.currentRateBand)}
+                              </p>
+                              <p className="summary-rate-overview-line">
+                                <span>最大</span>
+                                {renderRateWithBand(item.maxRate, item.maxRateBand)}
+                              </p>
+                              <p className="summary-rate-overview-line">
+                                <span>勝率</span>
+                                <strong>{item.winRate === null ? "-" : `${item.winRate.toFixed(1)}%`}</strong>
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -2126,11 +2423,11 @@ function App() {
 
                     <div className="summary-card">
                       <p className="summary-label">相手レート帯別 勝率</p>
-                      {opponentRateBandWinStats.length === 0 ? (
+                      {visibleOpponentRateBandWinStats.length === 0 ? (
                         <p className="summary-sub">対象レコードなし</p>
                       ) : (
                         <div className="rate-band-chart">
-                          {opponentRateBandWinStats.map((item) => (
+                          {visibleOpponentRateBandWinStats.map((item) => (
                             <div key={item.rateBand} className="rate-band-row rate-band-row-overlay">
                               <span className="rate-band-label">{item.rateBand}</span>
                               <span className="rate-band-value">{formatPercent(item.winRate)}</span>
@@ -2151,11 +2448,11 @@ function App() {
                   </div>
                   <div className="summary-card">
                     <p className="summary-label">自分キャラ別 勝率</p>
-                    {myCharacterWinStats.length === 0 ? (
+                    {visibleMyCharacterWinStats.length === 0 ? (
                       <p className="summary-sub">対象レコードなし</p>
                     ) : (
                       <div className="rate-band-chart opponent-character-chart">
-                        {myCharacterWinStats.map((item) => (
+                        {getVisibleRateList(visibleMyCharacterWinStats, "winRateCharacter").map((item) => (
                           <div
                             key={item.character}
                             className="rate-band-row rate-band-row-character rate-band-row-overlay"
@@ -2173,21 +2470,116 @@ function App() {
                             </div>
                           </div>
                         ))}
+                        {renderRateListToggle("winRateCharacter", visibleMyCharacterWinStats.length)}
                       </div>
                     )}
                   </div>
                   <div className="summary-card">
                     <p className="summary-label">相手キャラ別 勝率</p>
-                    {opponentCharacterWinStats.length === 0 ? (
+                    {visibleOpponentCharacterWinStats.length === 0 ? (
                       <p className="summary-sub">対象レコードなし</p>
                     ) : (
                       <div className="rate-band-chart opponent-character-chart">
-                        {opponentCharacterWinStats.map((item) => (
+                        {getVisibleRateList(visibleOpponentCharacterWinStats, "winRateCharacter").map((item) => (
                           <div
                             key={item.character}
                             className="rate-band-row rate-band-row-character rate-band-row-overlay"
                           >
                             <span className="rate-band-label rate-band-label-character">{item.label}</span>
+                            <span className="rate-band-value">{formatPercent(item.winRate)}</span>
+                            <div className="rate-band-track">
+                              <div
+                                className="rate-band-fill"
+                                style={{ width: `${Math.max(2, item.winRate)}%` }}
+                              />
+                              <span className="rate-band-meta">
+                                {item.wins}/{item.total}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {renderRateListToggle("winRateCharacter", visibleOpponentCharacterWinStats.length)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="summary-win-racket-grid">
+                  <div className="summary-card">
+                    <p className="summary-label">自分ラケット別 勝率</p>
+                    {visibleMyRacketWinStats.length === 0 ? (
+                      <p className="summary-sub">対象レコードなし</p>
+                    ) : (
+                      <div className="rate-band-chart opponent-character-chart">
+                        {getVisibleRateList(visibleMyRacketWinStats, "winRateRacket").map((item) => (
+                          <div
+                            key={`my-racket-win-${item.racket}`}
+                            className="rate-band-row rate-band-row-character rate-band-row-racket rate-band-row-overlay"
+                          >
+                            <span className="rate-band-label rate-band-label-character rate-band-label-racket">
+                              {item.label}
+                            </span>
+                            <span className="rate-band-value">{formatPercent(item.winRate)}</span>
+                            <div className="rate-band-track">
+                              <div
+                                className="rate-band-fill"
+                                style={{ width: `${Math.max(2, item.winRate)}%` }}
+                              />
+                              <span className="rate-band-meta">
+                                {item.wins}/{item.total}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {renderRateListToggle("winRateRacket", visibleMyRacketWinStats.length)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="summary-card">
+                    <p className="summary-label">相手ラケット別 勝率</p>
+                    {visibleOpponentRacketWinStats.length === 0 ? (
+                      <p className="summary-sub">対象レコードなし</p>
+                    ) : (
+                      <div className="rate-band-chart opponent-character-chart">
+                        {getVisibleRateList(visibleOpponentRacketWinStats, "winRateRacket").map((item) => (
+                          <div
+                            key={`opponent-racket-win-${item.racket}`}
+                            className="rate-band-row rate-band-row-character rate-band-row-racket rate-band-row-overlay"
+                          >
+                            <span className="rate-band-label rate-band-label-character rate-band-label-racket">
+                              {item.label}
+                            </span>
+                            <span className="rate-band-value">{formatPercent(item.winRate)}</span>
+                            <div className="rate-band-track">
+                              <div
+                                className="rate-band-fill"
+                                style={{ width: `${Math.max(2, item.winRate)}%` }}
+                              />
+                              <span className="rate-band-meta">
+                                {item.wins}/{item.total}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {renderRateListToggle("winRateRacket", visibleOpponentRacketWinStats.length)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="summary-win-stage-section">
+                  <div className="summary-card">
+                    <p className="summary-label">ステージ別 勝率</p>
+                    {visibleStageWinStats.length === 0 ? (
+                      <p className="summary-sub">対象レコードなし</p>
+                    ) : (
+                      <div className="rate-band-chart opponent-character-chart">
+                        {visibleStageWinStats.map((item) => (
+                          <div
+                            key={`stage-win-${item.stage}`}
+                            className="rate-band-row rate-band-row-character rate-band-row-stage rate-band-row-overlay"
+                          >
+                            <span className="rate-band-label rate-band-label-character rate-band-label-stage">
+                              {item.label}
+                            </span>
                             <span className="rate-band-value">{formatPercent(item.winRate)}</span>
                             <div className="rate-band-track">
                               <div
@@ -2208,56 +2600,120 @@ function App() {
             )}
             {summaryViewMode === "usage" && (
               <div className="summary-subsection">
-                <div className="summary-usage-grid">
-                  <div className="summary-card">
-                    <p className="summary-label">自分キャラ使用率</p>
-                    {myCharacterUsageStats.length === 0 ? (
-                      <p className="summary-sub">対象レコードなし</p>
-                    ) : (
-                      <div className="rate-band-chart opponent-character-chart">
-                        {myCharacterUsageStats.map((item) => (
-                          <div
-                            key={`my-usage-${item.character}`}
-                            className="rate-band-row rate-band-row-character rate-band-row-usage rate-band-row-overlay"
-                          >
-                            <span className="rate-band-label rate-band-label-character">{item.label}</span>
-                            <span className="rate-band-value">{formatPercent(item.usageRate)}</span>
-                            <div className="rate-band-track">
-                              <div
-                                className="rate-band-fill"
-                                style={{ width: `${Math.max(2, item.usageRate)}%` }}
-                              />
-                              <span className="rate-band-meta">{item.count}</span>
+                <div className="summary-usage-section">
+                  <div className="summary-usage-grid">
+                    <div className="summary-card">
+                      <p className="summary-label">自分キャラ使用率</p>
+                      {myCharacterUsageStats.length === 0 ? (
+                        <p className="summary-sub">対象レコードなし</p>
+                      ) : (
+                        <div className="rate-band-chart opponent-character-chart">
+                          {getVisibleRateList(myCharacterUsageStats, "usageCharacter").map((item) => (
+                            <div
+                              key={`my-usage-${item.character}`}
+                              className="rate-band-row rate-band-row-character rate-band-row-usage rate-band-row-overlay"
+                            >
+                              <span className="rate-band-label rate-band-label-character">{item.label}</span>
+                              <span className="rate-band-value">{formatPercent(item.usageRate)}</span>
+                              <div className="rate-band-track">
+                                <div
+                                  className="rate-band-fill"
+                                  style={{ width: `${Math.max(2, item.usageRate)}%` }}
+                                />
+                                <span className="rate-band-meta">{item.count}</span>
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                          {renderRateListToggle("usageCharacter", myCharacterUsageStats.length)}
+                        </div>
+                      )}
+                    </div>
+                    <div className="summary-card">
+                      <p className="summary-label">相手キャラ使用率</p>
+                      {opponentCharacterUsageStats.length === 0 ? (
+                        <p className="summary-sub">対象レコードなし</p>
+                      ) : (
+                        <div className="rate-band-chart opponent-character-chart">
+                          {getVisibleRateList(opponentCharacterUsageStats, "usageCharacter").map((item) => (
+                            <div
+                              key={`usage-${item.character}`}
+                              className="rate-band-row rate-band-row-character rate-band-row-usage rate-band-row-overlay"
+                            >
+                              <span className="rate-band-label rate-band-label-character">{item.label}</span>
+                              <span className="rate-band-value">{formatPercent(item.usageRate)}</span>
+                              <div className="rate-band-track">
+                                <div
+                                  className="rate-band-fill"
+                                  style={{ width: `${Math.max(2, item.usageRate)}%` }}
+                                />
+                                <span className="rate-band-meta">{item.count}</span>
+                              </div>
+                            </div>
+                          ))}
+                          {renderRateListToggle("usageCharacter", opponentCharacterUsageStats.length)}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="summary-card">
-                    <p className="summary-label">相手キャラ使用率</p>
-                    {opponentCharacterUsageStats.length === 0 ? (
-                      <p className="summary-sub">対象レコードなし</p>
-                    ) : (
-                      <div className="rate-band-chart opponent-character-chart">
-                        {opponentCharacterUsageStats.map((item) => (
-                          <div
-                            key={`usage-${item.character}`}
-                            className="rate-band-row rate-band-row-character rate-band-row-usage rate-band-row-overlay"
-                          >
-                            <span className="rate-band-label rate-band-label-character">{item.label}</span>
-                            <span className="rate-band-value">{formatPercent(item.usageRate)}</span>
-                            <div className="rate-band-track">
-                              <div
-                                className="rate-band-fill"
-                                style={{ width: `${Math.max(2, item.usageRate)}%` }}
-                              />
-                              <span className="rate-band-meta">{item.count}</span>
+                </div>
+                <div className="summary-usage-section">
+                  <div className="summary-usage-grid">
+                    <div className="summary-card">
+                      <p className="summary-label">自分ラケット使用率</p>
+                      {myRacketUsageStats.length === 0 ? (
+                        <p className="summary-sub">対象レコードなし</p>
+                      ) : (
+                        <div className="rate-band-chart opponent-character-chart">
+                          {getVisibleRateList(myRacketUsageStats, "usageRacket").map((item) => (
+                            <div
+                              key={`my-racket-usage-${item.racket}`}
+                              className="rate-band-row rate-band-row-character rate-band-row-racket rate-band-row-usage rate-band-row-overlay"
+                            >
+                              <span className="rate-band-label rate-band-label-character rate-band-label-racket">
+                                {item.label}
+                              </span>
+                              <span className="rate-band-value">{formatPercent(item.usageRate)}</span>
+                              <div className="rate-band-track">
+                                <div
+                                  className="rate-band-fill"
+                                  style={{ width: `${Math.max(2, item.usageRate)}%` }}
+                                />
+                                <span className="rate-band-meta">{item.count}</span>
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                          {renderRateListToggle("usageRacket", myRacketUsageStats.length)}
+                        </div>
+                      )}
+                    </div>
+                    <div className="summary-card">
+                      <p className="summary-label">相手ラケット使用率</p>
+                      {opponentRacketUsageStats.length === 0 ? (
+                        <p className="summary-sub">対象レコードなし</p>
+                      ) : (
+                        <div className="rate-band-chart opponent-character-chart">
+                          {getVisibleRateList(opponentRacketUsageStats, "usageRacket").map((item) => (
+                            <div
+                              key={`opponent-racket-usage-${item.racket}`}
+                              className="rate-band-row rate-band-row-character rate-band-row-racket rate-band-row-usage rate-band-row-overlay"
+                            >
+                              <span className="rate-band-label rate-band-label-character rate-band-label-racket">
+                                {item.label}
+                              </span>
+                              <span className="rate-band-value">{formatPercent(item.usageRate)}</span>
+                              <div className="rate-band-track">
+                                <div
+                                  className="rate-band-fill"
+                                  style={{ width: `${Math.max(2, item.usageRate)}%` }}
+                                />
+                                <span className="rate-band-meta">{item.count}</span>
+                              </div>
+                            </div>
+                          ))}
+                          {renderRateListToggle("usageRacket", opponentRacketUsageStats.length)}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
