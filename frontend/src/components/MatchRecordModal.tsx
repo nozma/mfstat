@@ -199,17 +199,30 @@ const SCORE_SELECTION_OPTIONS = ["0", "1", "2", "3", "4", "5", "6"] as const;
 const toWinningScore = (selectedScore: string) => (selectedScore === "6" ? "8" : "7");
 
 const sectionSx = {
+  position: "relative",
   px: 2,
-  py: 1,
+  pt: 1.8,
+  pb: 1,
   border: "1px solid #cfdae4",
   borderRadius: 2.5,
-  backgroundColor: "#ffffff",
-  boxShadow: "0 6px 16px rgba(14, 40, 67, 0.08), 0 1px 2px rgba(14, 40, 67, 0.08)"
+  backgroundColor: "#ffffff"
 } as const;
 
 const sectionTitleSx = {
-  color: "#11324a",
-  letterSpacing: "0.01em"
+  position: "absolute",
+  top: 0,
+  left: 14,
+  px: 0.6,
+  transform: "translateY(-50%)",
+  borderRadius: 1,
+  backgroundColor: "rgba(245, 249, 254, 0.74)",
+  backdropFilter: "blur(3px)",
+  WebkitBackdropFilter: "blur(3px)",
+  color: "#aab6c0",
+  fontWeight: 500,
+  letterSpacing: "0.01em",
+  fontSize: "0.78rem",
+  lineHeight: 1.1
 } as const;
 
 const formRowSx = {
@@ -716,7 +729,7 @@ function MatchRecordModal({
         sx: {
           borderRadius: 3,
           border: "1px solid #c7d5e2",
-          boxShadow: "0 28px 56px rgba(7, 22, 39, 0.26), 0 8px 18px rgba(7, 22, 39, 0.16)",
+          boxShadow: "none",
           backgroundColor: "#f5f9fe",
           overflow: "hidden"
         }
@@ -773,7 +786,7 @@ function MatchRecordModal({
         <DialogContent
           dividers
           sx={{
-            maxHeight: "72vh",
+            maxHeight: "80vh",
             p: 2.2,
             background:
               "radial-gradient(circle at top right, rgba(221, 237, 251, 0.5) 0%, rgba(245, 249, 254, 1) 42%)",
@@ -794,12 +807,12 @@ function MatchRecordModal({
             }
           }}
         >
-          <Stack spacing={1}>
-            <Box sx={sectionSx}>
+          <Stack spacing={1.5}>
+            <Box sx={{ ...sectionSx, pt: 2.4 }}>
+              <Typography variant="subtitle2" sx={sectionTitleSx}>
+                試合情報
+              </Typography>
               <Stack spacing={1.5}>
-                <Typography variant="subtitle2" fontWeight={700} sx={sectionTitleSx}>
-                  試合情報
-                </Typography>
                 <Box sx={threeColSx}>
                   <TextField
                     label="試合日時"
@@ -858,11 +871,13 @@ function MatchRecordModal({
                     ))}
                   </TextField>
                 </Box>
-
               </Stack>
             </Box>
 
             <Box sx={sectionSx}>
+              <Typography variant="subtitle2" sx={sectionTitleSx}>
+                対戦相手
+              </Typography>
               <Stack
                 spacing={1.5}
                 sx={{
@@ -871,9 +886,6 @@ function MatchRecordModal({
                   }
                 }}
               >
-                <Typography variant="subtitle2" fontWeight={700} sx={sectionTitleSx}>
-                  対戦相手情報
-                </Typography>
                 <Box sx={singleFieldRowSx}>
                   <Box sx={opponentRateBandSelectorSx}>
                     {renderRateBandButtons("相手のレート帯", values.opponentRateBand, (option) =>
@@ -1051,7 +1063,10 @@ function MatchRecordModal({
               </Stack>
             </Box>
 
-            <Box sx={sectionSx}>
+            <Box sx={{ ...sectionSx, pt: 2.4 }}>
+              <Typography variant="subtitle2" sx={sectionTitleSx}>
+                自分
+              </Typography>
               <Stack
                 spacing={1.5}
                 sx={{
@@ -1060,9 +1075,6 @@ function MatchRecordModal({
                   }
                 }}
               >
-                <Typography variant="subtitle2" fontWeight={700} sx={sectionTitleSx}>
-                  自キャラ・自チーム情報
-                </Typography>
                 {isDoubles && (
                   <Box className="partner-rate-band-row" sx={singleFieldRowSx}>
                     <Box sx={opponentRateBandSelectorSx}>
@@ -1212,11 +1224,10 @@ function MatchRecordModal({
             </Box>
 
             <Box sx={sectionSx}>
+              <Typography variant="subtitle2" sx={sectionTitleSx}>
+                試合結果
+              </Typography>
               <Stack spacing={1.5}>
-                <Typography variant="subtitle2" fontWeight={700} sx={sectionTitleSx}>
-                  試合結果
-                </Typography>
-
                 <Box sx={resultGridSx}>
                   <Box sx={scoreSelectorSx}>
                     <Stack spacing={0.75}>
