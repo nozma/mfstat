@@ -54,7 +54,7 @@ const COLUMN_VISIBILITY_STORAGE_KEY = "mfstat.recordGrid.columnVisibility";
 const COLUMN_ORDER_STORAGE_KEY = "mfstat.recordGrid.columnOrder";
 const RATE_TREND_VIEW_MODE_STORAGE_KEY = "mfstat.rateTrend.viewMode";
 const RATE_TREND_RULE_STORAGE_KEY = "mfstat.rateTrend.rule";
-type DateFilterPreset = "all" | "last7" | "last30" | "custom";
+type DateFilterPreset = "all" | "last30" | "custom";
 type SummaryViewMode = "rate" | "winRate" | "usage";
 type FilterFieldKey =
   | "rule"
@@ -726,9 +726,6 @@ function App() {
     [records]
   );
   const dateRangeFilter = useMemo(() => {
-    if (dateFilterPreset === "last7") {
-      return { from: Date.now() - 7 * 24 * 60 * 60 * 1000, to: null as number | null };
-    }
     if (dateFilterPreset === "last30") {
       return { from: Date.now() - 30 * 24 * 60 * 60 * 1000, to: null as number | null };
     }
@@ -1917,9 +1914,6 @@ function App() {
               <div className="record-list-header">
                 <div className="record-list-title-group">
                   <h2>記録一覧</h2>
-                  <button type="button" className="button primary" onClick={openCreateModal}>
-                    記録を追加
-                  </button>
                 </div>
                 <button
                   type="button"
@@ -2269,23 +2263,28 @@ function App() {
           </section>
         </div>
 
-        <aside className="record-filter-panel">
-          <div className="record-filter-header">
-            <h3>絞り込み</h3>
-            <button
-              type="button"
-              className="button secondary filter-clear-button"
-              onClick={resetFilters}
-              disabled={activeFilterCount === 0}
-            >
-              クリア
-            </button>
-          </div>
-          <p className="record-filter-count">
-            表示: {filteredRecords.length} / {records.length} 件
-          </p>
+        <aside className="dashboard-sidebar">
+          <button type="button" className="button primary sidebar-create-button" onClick={openCreateModal}>
+            記録を作成
+          </button>
 
-          <Stack spacing={1.2}>
+          <div className="record-filter-panel">
+            <div className="record-filter-header">
+              <h3>絞り込み</h3>
+              <button
+                type="button"
+                className="button secondary filter-clear-button"
+                onClick={resetFilters}
+                disabled={activeFilterCount === 0}
+              >
+                クリア
+              </button>
+            </div>
+            <p className="record-filter-count">
+              表示: {filteredRecords.length} / {records.length} 件
+            </p>
+
+            <Stack spacing={1.2}>
             <FormControl size="small" fullWidth>
               <InputLabel id="filter-rule-label">ルール</InputLabel>
               <Select
@@ -2487,50 +2486,51 @@ function App() {
               </Select>
             </FormControl>
 
-            <Box className="filter-date-section">
-              <p className="filter-field-label">試合日時</p>
-              <ToggleButtonGroup
-                size="small"
-                exclusive
-                value={dateFilterPreset}
-                onChange={(_, value: DateFilterPreset | null) => {
-                  if (value !== null) {
-                    setDateFilterPreset(value);
-                  }
-                }}
-                fullWidth
-                color="primary"
-              >
-                <ToggleButton value="all">全期間</ToggleButton>
-                <ToggleButton value="last7">直近7日</ToggleButton>
-                <ToggleButton value="last30">直近30日</ToggleButton>
-                <ToggleButton value="custom">範囲</ToggleButton>
-              </ToggleButtonGroup>
+              <Box sx={{ pt: 0.6 }}>
+                <Box className="filter-date-section">
+                  <ToggleButtonGroup
+                    size="small"
+                    exclusive
+                    value={dateFilterPreset}
+                    onChange={(_, value: DateFilterPreset | null) => {
+                      if (value !== null) {
+                        setDateFilterPreset(value);
+                      }
+                    }}
+                    fullWidth
+                    color="primary"
+                  >
+                    <ToggleButton value="all">全期間</ToggleButton>
+                    <ToggleButton value="last30">直近30日</ToggleButton>
+                    <ToggleButton value="custom">範囲</ToggleButton>
+                  </ToggleButtonGroup>
 
-              <Stack spacing={1} sx={{ mt: 1 }}>
-                <TextField
-                  size="small"
-                  type="datetime-local"
-                  label="開始"
-                  value={dateFrom}
-                  onChange={(event) => setDateFrom(event.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  disabled={dateFilterPreset !== "custom"}
-                  fullWidth
-                />
-                <TextField
-                  size="small"
-                  type="datetime-local"
-                  label="終了"
-                  value={dateTo}
-                  onChange={(event) => setDateTo(event.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  disabled={dateFilterPreset !== "custom"}
-                  fullWidth
-                />
-              </Stack>
-            </Box>
-          </Stack>
+                  <Stack spacing={1} sx={{ mt: 1 }}>
+                    <TextField
+                      size="small"
+                      type="datetime-local"
+                      label="開始"
+                      value={dateFrom}
+                      onChange={(event) => setDateFrom(event.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                      disabled={dateFilterPreset !== "custom"}
+                      fullWidth
+                    />
+                    <TextField
+                      size="small"
+                      type="datetime-local"
+                      label="終了"
+                      value={dateTo}
+                      onChange={(event) => setDateTo(event.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                      disabled={dateFilterPreset !== "custom"}
+                      fullWidth
+                    />
+                  </Stack>
+                </Box>
+              </Box>
+            </Stack>
+          </div>
         </aside>
       </div>
 
