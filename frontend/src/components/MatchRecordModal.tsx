@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Box,
   Button,
   Checkbox,
@@ -11,6 +12,7 @@ import {
   FormControlLabel,
   IconButton,
   MenuItem,
+  Snackbar,
   Stack,
   TextField,
   Typography
@@ -381,6 +383,15 @@ const scoreWinningBadgeSx = {
   ...scoreSelectorButtonSelectedSx
 } as const;
 
+const actionButtonDisabledLikeSx = {
+  opacity: 0.38,
+  cursor: "not-allowed",
+  pointerEvents: "auto"
+} as const;
+
+const SAVE_DISABLED_MESSAGE = "スコアを選択してください。";
+const STAGE_REQUIRED_MESSAGE = "ステージを選択してください。";
+
 const rateControlSx = {
   display: "flex",
   alignItems: "center",
@@ -417,6 +428,7 @@ function MatchRecordModal({
     }
     return true;
   });
+  const [validationToastMessage, setValidationToastMessage] = useState<string | null>(null);
 
   const selectedRule = RULE_OPTIONS.find((option) => option.value === values.rule) ?? RULE_OPTIONS[0];
   const isDoubles = selectedRule.isDoubles;
@@ -506,6 +518,13 @@ function MatchRecordModal({
   const hasScoreSelection = SCORE_SELECTION_OPTIONS.some(
     (score) => isOpponentScoreSelected(score) || isMyScoreSelected(score)
   );
+  const hasStageSelection = values.stage.trim().length > 0;
+  const validationMessage = !hasStageSelection
+    ? STAGE_REQUIRED_MESSAGE
+    : !hasScoreSelection
+      ? SAVE_DISABLED_MESSAGE
+      : null;
+  const isSaveBlockedByValidation = validationMessage !== null;
   const selectedScore =
     SCORE_SELECTION_OPTIONS.find((score) => isOpponentScoreSelected(score) || isMyScoreSelected(score)) ??
     null;
@@ -522,6 +541,12 @@ function MatchRecordModal({
       String(isPlayerNameRecordingEnabled)
     );
   }, [isPlayerNameRecordingEnabled]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setValidationToastMessage(null);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -644,14 +669,22 @@ function MatchRecordModal({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isSubmitting || !hasScoreSelection) {
+    if (isSubmitting) {
+      return;
+    }
+    if (validationMessage) {
+      setValidationToastMessage(validationMessage);
       return;
     }
     void onSubmit(buildNormalizedValues());
   };
 
   const handleSaveAndContinue = () => {
-    if (isSubmitting || mode !== "create" || !hasScoreSelection) {
+    if (isSubmitting || mode !== "create") {
+      return;
+    }
+    if (validationMessage) {
+      setValidationToastMessage(validationMessage);
       return;
     }
     void onSubmit(buildNormalizedValues(), { keepOpenAfterSave: true });
@@ -782,7 +815,7 @@ function MatchRecordModal({
         </Stack>
       </DialogTitle>
 
-      <Box component="form" onSubmit={handleSubmit}>
+      <Box component="form" onSubmit={handleSubmit} noValidate>
         <DialogContent
           dividers
           sx={{
@@ -864,6 +897,9 @@ function MatchRecordModal({
                     required
                     sx={{ ...fieldWidthSx.stage, ...compactInputTextSx }}
                   >
+                    <MenuItem value="">
+                      <em>選択してください</em>
+                    </MenuItem>
                     {stageOptions.map((option) => (
                       <MenuItem key={option} value={option}>
                         {option}
@@ -1414,14 +1450,42 @@ function MatchRecordModal({
               variant="outlined"
               onClick={handleSaveAndContinue}
               disabled={isSubmitting}
+              aria-disabled={isSaveBlockedByValidation ? "true" : undefined}
+              sx={isSaveBlockedByValidation ? actionButtonDisabledLikeSx : undefined}
             >
               {isSubmitting ? "保存中..." : "保存して続ける"}
             </Button>
           )}
-          <Button type="submit" variant="contained" disabled={isSubmitting || !hasScoreSelection}>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={isSubmitting}
+            aria-disabled={isSaveBlockedByValidation ? "true" : undefined}
+            sx={isSaveBlockedByValidation ? actionButtonDisabledLikeSx : undefined}
+          >
             {isSubmitting ? "保存中..." : "保存"}
           </Button>
         </DialogActions>
+        <Snackbar
+          open={validationToastMessage !== null}
+          autoHideDuration={2500}
+          onClose={(_, reason) => {
+            if (reason === "clickaway") {
+              return;
+            }
+            setValidationToastMessage(null);
+          }}
+          anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        >
+          <Alert
+            severity="warning"
+            variant="filled"
+            onClose={() => setValidationToastMessage(null)}
+            sx={{ width: "100%" }}
+          >
+            {validationToastMessage}
+          </Alert>
+        </Snackbar>
       </Box>
     </Dialog>
   );

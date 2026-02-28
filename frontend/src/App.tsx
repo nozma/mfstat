@@ -1,5 +1,6 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   Box,
   Checkbox,
   Chip,
@@ -11,6 +12,7 @@ import {
   MenuItem,
   OutlinedInput,
   Select,
+  Snackbar,
   Stack,
   TextField,
   ToggleButton,
@@ -77,6 +79,8 @@ type ExpandableRateListKey =
 
 const RATE_BAND_COLLAPSE_ROW_COUNT = 13;
 const WIN_RATE_MIN_MATCH_COUNT = 5;
+const SAVE_SUCCESS_MESSAGE = "記録を保存しました。";
+const DELETE_SUCCESS_MESSAGE = "記録を削除しました。";
 
 const pad2 = (value: number) => value.toString().padStart(2, "0");
 
@@ -99,6 +103,32 @@ const displayOrDash = (value: string) => {
 const parsePlayedAtTimestamp = (playedAt: string) => {
   const timestamp = new Date(playedAt).getTime();
   return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+
+const getNextStageRotationTimestamp = (timestamp: number) => {
+  const nextRotation = new Date(timestamp);
+  nextRotation.setSeconds(0, 0);
+
+  if (nextRotation.getMinutes() < 30) {
+    nextRotation.setMinutes(30);
+    return nextRotation.getTime();
+  }
+
+  nextRotation.setHours(nextRotation.getHours() + 1, 0, 0, 0);
+  return nextRotation.getTime();
+};
+
+const shouldResetStageSelection = (playedAt: string, openedAt: number | null) => {
+  if (openedAt === null) {
+    return false;
+  }
+
+  const previousPlayedAt = parsePlayedAtTimestamp(playedAt);
+  if (previousPlayedAt <= 0 || openedAt <= previousPlayedAt) {
+    return false;
+  }
+
+  return getNextStageRotationTimestamp(previousPlayedAt) <= openedAt;
 };
 
 const uniqueStringList = (values: string[]) => Array.from(new Set(values));
@@ -262,6 +292,14 @@ const normalizeInlineEditValues = (values: MatchRecordValues): MatchRecordValues
   return normalized;
 };
 
+const hasMatchRecordValuesChanged = (
+  left: MatchRecordValues,
+  right: MatchRecordValues
+) => {
+  const keys = Object.keys(left) as Array<keyof MatchRecordValues>;
+  return keys.some((key) => left[key] !== right[key]);
+};
+
 const resultChipColor = (value: string): "success" | "error" | "default" => {
   if (value === "WIN") {
     return "success";
@@ -423,6 +461,9 @@ function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingRecordId, setDeletingRecordId] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successToastMessage, setSuccessToastMessage] = useState<string | null>(null);
+  const [errorToastMessage, setErrorToastMessage] = useState<string | null>(null);
+  const [createModalOpenedAt, setCreateModalOpenedAt] = useState<number | null>(null);
   const [isColumnOrderEditorOpen, setIsColumnOrderEditorOpen] = useState(false);
   const [selectedRules, setSelectedRules] = useState<MatchRecordValues["rule"][]>([]);
   const [selectedStages, setSelectedStages] = useState<string[]>([]);
@@ -510,6 +551,16 @@ function App() {
     }
   });
 
+  const showSuccessToast = (message: string) => {
+    setErrorToastMessage(null);
+    setSuccessToastMessage(message);
+  };
+
+  const showErrorToast = (message: string) => {
+    setSuccessToastMessage(null);
+    setErrorToastMessage(message);
+  };
+
   const editingRecord = useMemo(
     () => records.find((record) => record.id === editingRecordId),
     [records, editingRecordId]
@@ -522,7 +573,9 @@ function App() {
 
     return {
       rule: latestRecord.rule,
-      stage: latestRecord.stage,
+      stage: shouldResetStageSelection(latestRecord.playedAt, createModalOpenedAt)
+        ? ""
+        : latestRecord.stage,
       myCharacter: latestRecord.myCharacter,
       myRacket: latestRecord.myRacket,
       myRate: latestRecord.myRate,
@@ -531,7 +584,7 @@ function App() {
       opponentRateBand: latestRecord.myRateBand,
       opponentPartnerRateBand: latestRecord.opponentPartnerRateBand || RATE_BAND_OPTIONS[0]
     };
-  }, [latestRecord]);
+  }, [createModalOpenedAt, latestRecord]);
 
   const loadRecords = async (mode: "initial" | "manual" = "initial") => {
     const setLoadingState = mode === "initial" ? setIsLoading : setIsRefreshing;
@@ -616,6 +669,7 @@ function App() {
 
   const openCreateModal = () => {
     setEditingRecordId(null);
+    setCreateModalOpenedAt(Date.now());
     setIsModalOpen(true);
   };
 
@@ -649,12 +703,15 @@ function App() {
           prev.map((record) => (record.id === updatedRecord.id ? updatedRecord : record))
         );
       }
+      showSuccessToast(SAVE_SUCCESS_MESSAGE);
 
       if (!shouldKeepOpenAfterSave) {
         setIsModalOpen(false);
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "記録の保存に失敗しました。");
+      const message = error instanceof Error ? error.message : "記録の保存に失敗しました。";
+      setErrorMessage(message);
+      showErrorToast(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -670,12 +727,15 @@ function App() {
       setErrorMessage(null);
       await deleteRecord(id);
       setRecords((prev) => prev.filter((record) => record.id !== id));
+      showSuccessToast(DELETE_SUCCESS_MESSAGE);
       if (editingRecordId === id) {
         setEditingRecordId(null);
         setIsModalOpen(false);
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "記録の削除に失敗しました。");
+      const message = error instanceof Error ? error.message : "記録の削除に失敗しました。";
+      setErrorMessage(message);
+      showErrorToast(message);
     } finally {
       setDeletingRecordId(null);
     }
@@ -688,18 +748,26 @@ function App() {
     }
   };
 
-  const handleInlineRowUpdate = async (newRow: MatchRecord) => {
+  const handleInlineRowUpdate = async (newRow: MatchRecord, oldRow: MatchRecord) => {
     setErrorMessage(null);
-    const values = normalizeInlineEditValues(toMatchRecordValues(newRow));
-    const updatedRecord = await updateRecord(newRow.id, values);
+    const nextValues = normalizeInlineEditValues(toMatchRecordValues(newRow));
+    const previousValues = normalizeInlineEditValues(toMatchRecordValues(oldRow));
+    if (!hasMatchRecordValuesChanged(nextValues, previousValues)) {
+      return oldRow;
+    }
+
+    const updatedRecord = await updateRecord(newRow.id, nextValues);
     setRecords((prev) =>
       prev.map((record) => (record.id === updatedRecord.id ? updatedRecord : record))
     );
+    showSuccessToast(SAVE_SUCCESS_MESSAGE);
     return updatedRecord;
   };
 
   const handleInlineRowUpdateError = (error: unknown) => {
-    setErrorMessage(error instanceof Error ? error.message : "記録の保存に失敗しました。");
+    const message = error instanceof Error ? error.message : "記録の保存に失敗しました。";
+    setErrorMessage(message);
+    showErrorToast(message);
   };
 
   const handleGridCellClick = (params: GridCellParams<MatchRecord>) => {
@@ -3005,6 +3073,46 @@ function App() {
         onClose={closeModal}
         onSubmit={handleSubmit}
       />
+      <Snackbar
+        open={successToastMessage !== null}
+        autoHideDuration={2500}
+        onClose={(_, reason) => {
+          if (reason === "clickaway") {
+            return;
+          }
+          setSuccessToastMessage(null);
+        }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          severity="success"
+          variant="filled"
+          onClose={() => setSuccessToastMessage(null)}
+          sx={{ width: "100%" }}
+        >
+          {successToastMessage}
+        </Alert>
+      </Snackbar>
+      <Snackbar
+        open={errorToastMessage !== null}
+        autoHideDuration={3000}
+        onClose={(_, reason) => {
+          if (reason === "clickaway") {
+            return;
+          }
+          setErrorToastMessage(null);
+        }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          severity="error"
+          variant="filled"
+          onClose={() => setErrorToastMessage(null)}
+          sx={{ width: "100%" }}
+        >
+          {errorToastMessage}
+        </Alert>
+      </Snackbar>
     </main>
   );
 }
