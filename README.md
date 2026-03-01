@@ -1,6 +1,6 @@
 # MFStat
 
-マリオテニスフィーバーのランクマッチ結果を記録する、個人向けローカルWebアプリです。
+マリオテニスフィーバーのランクマッチの結果を記録、集計するローカルWebアプリです。
 
 <p>
   <img src="docs/images/dashboard-rate.png" alt="レート推移画面" width="49%" />
