@@ -508,7 +508,7 @@ function MatchRecordModal({
     }
     return STAGE_OPTIONS;
   }, [values.stage]);
-  const rateBandSelectOptions = useMemo(() => [...RATE_BAND_OPTIONS].reverse(), []);
+  const rateBandSelectOptions = RATE_BAND_OPTIONS;
   const myRateValue = Number.parseInt(values.myRate, 10);
   const canDecreaseRate = Number.isNaN(myRateValue) ? false : myRateValue > 0;
   const isOpponentScoreSelected = (score: string) =>
