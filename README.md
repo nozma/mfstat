@@ -2,6 +2,10 @@
 
 マリオテニスフィーバーのランクマッチ結果を記録する、個人向けローカルWebアプリです。
 
+![レート推移画面](docs/images/dashboard-rate.png)
+
+![使用率画面](docs/images/dashboard-usage.png)
+
 ## リリース版のダウンロードと使い方
 
 最新版の一覧: [GitHub Releases](https://github.com/nozma/mfstat/releases/latest)
