@@ -606,9 +606,9 @@ function App() {
       myRacket: latestRecord.myRacket,
       myRate: latestRecord.myRate,
       myRateBand: latestRecord.myRateBand,
-      myPartnerRateBand: latestRecord.myPartnerRateBand || RATE_BAND_OPTIONS[0],
+      myPartnerRateBand: latestRecord.myRateBand || RATE_BAND_OPTIONS[0],
       opponentRateBand: latestRecord.myRateBand,
-      opponentPartnerRateBand: latestRecord.opponentPartnerRateBand || RATE_BAND_OPTIONS[0]
+      opponentPartnerRateBand: latestRecord.myRateBand || RATE_BAND_OPTIONS[0]
     };
   }, [createModalOpenedAt, latestRecord]);
 
