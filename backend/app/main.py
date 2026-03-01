@@ -13,6 +13,7 @@ from sqlmodel import Session, select
 
 from .database import get_session, init_db
 from .models import MatchRecord, MatchRecordCreate, MatchRecordRead, MatchRecordUpdate
+from .season import compute_season_from_played_at
 
 app = FastAPI(title="MFStat API")
 logger = logging.getLogger("mfstat.api")
@@ -142,6 +143,7 @@ def list_records(session: Session = Depends(get_session)):
 @app.post("/records", response_model=MatchRecordRead, status_code=status.HTTP_201_CREATED)
 def create_record(payload: MatchRecordCreate, session: Session = Depends(get_session)):
     payload_data = payload.model_dump()
+    payload_data["season"] = compute_season_from_played_at(payload.played_at)
     payload_data["result"] = compute_result(payload.my_score, payload.opponent_score)
     record = MatchRecord.model_validate(payload_data)
     session.add(record)
@@ -163,6 +165,7 @@ def update_record(
     update_data = payload.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(record, key, value)
+    record.season = compute_season_from_played_at(record.played_at)
     record.result = compute_result(record.my_score, record.opponent_score)
 
     session.add(record)

@@ -7,6 +7,7 @@ type RateTrendLinePoint = {
   playedAt: string;
   rate: number;
   rateBand: string;
+  season: string;
 };
 
 type RateTrendLineSeries = {
@@ -43,25 +44,40 @@ const RateTrendLineChart = ({ series }: RateTrendLineChartProps) => {
 
   const traces = useMemo(
     () =>
-      series.map((entry) => ({
-        type: "scatter",
-        mode: "lines+markers",
-        name: entry.label,
-        x: entry.points.map((point) => point.timestamp),
-        y: entry.points.map((point) => point.rate),
-        customdata: entry.points.map((point) => [
-          formatPlayedAt(point.playedAt),
-          displayRateBand(point.rateBand)
-        ]),
-        line: { color: entry.color, width: 2.2 },
-        marker: {
-          color: entry.color,
-          size: 6,
-          line: { color: "#ffffff", width: 1 }
-        },
-        hovertemplate:
-          "対戦日時: %{customdata[0]}<br>レート: %{y}<br>レート帯: %{customdata[1]}<extra>%{fullData.name}</extra>"
-      })),
+      series.flatMap((entry) => {
+        const segments: RateTrendLinePoint[][] = [];
+        entry.points.forEach((point) => {
+          const currentSegment = segments[segments.length - 1];
+          if (!currentSegment || currentSegment[currentSegment.length - 1].season !== point.season) {
+            segments.push([point]);
+            return;
+          }
+          currentSegment.push(point);
+        });
+
+        return segments.map((points, index) => ({
+          type: "scatter",
+          mode: "lines+markers",
+          name: entry.label,
+          legendgroup: entry.rule,
+          showlegend: index === 0,
+          x: points.map((point) => point.timestamp),
+          y: points.map((point) => point.rate),
+          customdata: points.map((point) => [
+            formatPlayedAt(point.playedAt),
+            displayRateBand(point.rateBand),
+            point.season
+          ]),
+          line: { color: entry.color, width: 2.2 },
+          marker: {
+            color: entry.color,
+            size: 6,
+            line: { color: "#ffffff", width: 1 }
+          },
+          hovertemplate:
+            "対戦日時: %{customdata[0]}<br>シーズン: %{customdata[2]}<br>レート: %{y}<br>レート帯: %{customdata[1]}<extra>%{fullData.name}</extra>"
+        }));
+      }),
     [series]
   );
 

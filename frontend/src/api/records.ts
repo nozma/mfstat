@@ -2,6 +2,7 @@ import { MatchRecordValues } from "../components/MatchRecordModal";
 
 export type MatchRecord = MatchRecordValues & {
   id: number;
+  season: string;
   result: string;
   createdAt: string;
 };
@@ -10,6 +11,7 @@ type MatchRecordDto = {
   id: number;
   created_at: string;
   played_at: string;
+  season: string;
   rule: MatchRecordValues["rule"];
   stage: string;
   my_score: number;
@@ -111,6 +113,7 @@ const fromDto = (dto: MatchRecordDto): MatchRecord => ({
   id: dto.id,
   createdAt: dto.created_at,
   playedAt: formatDatetimeLocal(dto.played_at),
+  season: dto.season,
   rule: dto.rule,
   stage: dto.stage,
   myScore: String(dto.my_score),

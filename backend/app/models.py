@@ -30,6 +30,7 @@ class MatchRecordBase(SQLModel):
 
 class MatchRecord(MatchRecordBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    season: str = Field(min_length=7, max_length=7)
     result: str = Field(min_length=1, max_length=10)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
@@ -64,5 +65,6 @@ class MatchRecordUpdate(SQLModel):
 
 class MatchRecordRead(MatchRecordBase):
     id: int
+    season: str
     result: str
     created_at: datetime

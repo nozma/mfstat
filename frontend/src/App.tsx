@@ -70,7 +70,8 @@ type FilterFieldKey =
   | "myRacket"
   | "opponentCharacter"
   | "opponentRacket"
-  | "opponentRateBand";
+  | "opponentRateBand"
+  | "season";
 type ExpandableRateListKey =
   | "winRateCharacter"
   | "winRateRacket"
@@ -134,6 +135,29 @@ const shouldResetStageSelection = (playedAt: string, openedAt: number | null) =>
 const uniqueStringList = (values: string[]) => Array.from(new Set(values));
 const incrementCount = (map: Map<string, number>, key: string) => {
   map.set(key, (map.get(key) ?? 0) + 1);
+};
+const compareSeasonStringsDesc = (left: string, right: string) => right.localeCompare(left, "ja");
+const mergeColumnOrderWithDefaults = (savedOrder: string[], defaultColumnOrder: string[]) => {
+  const merged = savedOrder.filter((field) => defaultColumnOrder.includes(field));
+
+  defaultColumnOrder.forEach((field, index) => {
+    if (merged.includes(field)) {
+      return;
+    }
+
+    const nextKnownField = defaultColumnOrder
+      .slice(index + 1)
+      .find((candidate) => merged.includes(candidate));
+    if (!nextKnownField) {
+      merged.push(field);
+      return;
+    }
+
+    const insertIndex = merged.indexOf(nextKnownField);
+    merged.splice(insertIndex, 0, field);
+  });
+
+  return merged;
 };
 
 const displayResultLabel = (value: string) => {
@@ -472,6 +496,7 @@ function App() {
   const [selectedOpponentCharacters, setSelectedOpponentCharacters] = useState<string[]>([]);
   const [selectedOpponentRackets, setSelectedOpponentRackets] = useState<string[]>([]);
   const [selectedOpponentRateBands, setSelectedOpponentRateBands] = useState<string[]>([]);
+  const [selectedSeasons, setSelectedSeasons] = useState<string[]>([]);
   const [dateFilterPreset, setDateFilterPreset] = useState<DateFilterPreset>("all");
   const [summaryViewMode, setSummaryViewMode] = useState<SummaryViewMode>("rate");
   const [showOnlyMinMatchesWinRateStats, setShowOnlyMinMatchesWinRateStats] = useState<boolean>(() => {
@@ -853,6 +878,13 @@ function App() {
       ]),
     [records]
   );
+  const seasonFilterOptions = useMemo(
+    () =>
+      uniqueStringList(records.map((record) => record.season).filter((value) => value.trim().length > 0)).sort(
+        compareSeasonStringsDesc
+      ),
+    [records]
+  );
   const dateRangeFilter = useMemo(() => {
     if (dateFilterPreset === "last30") {
       return { from: Date.now() - 30 * 24 * 60 * 60 * 1000, to: null as number | null };
@@ -875,6 +907,7 @@ function App() {
     const opponentCharacterCounts = new Map<string, number>();
     const opponentRacketCounts = new Map<string, number>();
     const opponentRateBandCounts = new Map<string, number>();
+    const seasonCounts = new Map<string, number>();
 
     const matchesOtherFilters = (record: MatchRecord, ignore?: FilterFieldKey) => {
       if (ignore !== "rule" && selectedRules.length > 0 && !selectedRules.includes(record.rule)) {
@@ -914,6 +947,9 @@ function App() {
       ) {
         return false;
       }
+      if (ignore !== "season" && selectedSeasons.length > 0 && !selectedSeasons.includes(record.season)) {
+        return false;
+      }
 
       const playedAtTs = parsePlayedAtTimestamp(record.playedAt);
       if (dateRangeFilter.from !== null && playedAtTs < dateRangeFilter.from) {
@@ -948,6 +984,9 @@ function App() {
       if (matchesOtherFilters(record, "opponentRateBand")) {
         incrementCount(opponentRateBandCounts, record.opponentRateBand);
       }
+      if (matchesOtherFilters(record, "season")) {
+        incrementCount(seasonCounts, record.season);
+      }
     });
 
     return {
@@ -957,7 +996,8 @@ function App() {
       myRacketCounts,
       opponentCharacterCounts,
       opponentRacketCounts,
-      opponentRateBandCounts
+      opponentRateBandCounts,
+      seasonCounts
     };
   }, [
     dateRangeFilter.from,
@@ -968,9 +1008,23 @@ function App() {
     selectedOpponentCharacters,
     selectedOpponentRackets,
     selectedOpponentRateBands,
+    selectedSeasons,
     selectedRules,
     selectedStages
   ]);
+  const sortedSeasonFilterOptions = useMemo(
+    () =>
+      [...seasonFilterOptions].sort((left, right) => {
+        const countDiff =
+          (filterOptionCounts.seasonCounts.get(right) ?? 0) -
+          (filterOptionCounts.seasonCounts.get(left) ?? 0);
+        if (countDiff !== 0) {
+          return countDiff;
+        }
+        return compareSeasonStringsDesc(left, right);
+      }),
+    [filterOptionCounts.seasonCounts, seasonFilterOptions]
+  );
   const sortedStageFilterOptions = useMemo(
     () =>
       [...stageFilterOptions].sort((left, right) => {
@@ -1066,6 +1120,9 @@ function App() {
         ) {
           return false;
         }
+        if (selectedSeasons.length > 0 && !selectedSeasons.includes(record.season)) {
+          return false;
+        }
 
         const playedAtTs = parsePlayedAtTimestamp(record.playedAt);
         if (dateRangeFilter.from !== null && playedAtTs < dateRangeFilter.from) {
@@ -1086,6 +1143,7 @@ function App() {
       selectedOpponentCharacters,
       selectedOpponentRackets,
       selectedOpponentRateBands,
+      selectedSeasons,
       selectedRules,
       selectedStages
     ]
@@ -1098,6 +1156,7 @@ function App() {
     Number(selectedOpponentCharacters.length > 0) +
     Number(selectedOpponentRackets.length > 0) +
     Number(selectedOpponentRateBands.length > 0) +
+    Number(selectedSeasons.length > 0) +
     Number(dateRangeFilter.from !== null || dateRangeFilter.to !== null);
   const summary = useMemo(() => {
     const total = filteredRecords.length;
@@ -1417,7 +1476,8 @@ function App() {
         timestamp: parsePlayedAtTimestamp(record.playedAt),
         playedAt: record.playedAt,
         rate: Number(record.myRate),
-        rateBand: record.myRateBand.trim()
+        rateBand: record.myRateBand.trim(),
+        season: record.season
       }))
       .filter((sample) => sample.timestamp > 0 && !Number.isNaN(sample.rate))
       .sort((left, right) => {
@@ -1436,7 +1496,8 @@ function App() {
         timestamp: sample.timestamp,
         playedAt: sample.playedAt,
         rate: sample.rate,
-        rateBand: sample.rateBand
+        rateBand: sample.rateBand,
+        season: sample.season
       });
       pointsByRule.set(sample.rule, points);
     });
@@ -1456,7 +1517,8 @@ function App() {
         timestamp: parsePlayedAtTimestamp(record.playedAt),
         playedAt: record.playedAt,
         rate: Number(record.myRate),
-        rateBand: record.myRateBand.trim()
+        rateBand: record.myRateBand.trim(),
+        season: record.season
       }))
       .filter((sample) => sample.timestamp > 0 && !Number.isNaN(sample.rate))
       .sort((left, right) => {
@@ -1520,7 +1582,8 @@ function App() {
           playedAt: item.end.playedAt,
           rate: item.end.rate,
           rateBand: item.end.rateBand,
-          dateKey: item.dateKey
+          dateKey: item.dateKey,
+          season: item.end.season
         }));
 
       return {
@@ -1687,6 +1750,7 @@ function App() {
     setSelectedOpponentCharacters([]);
     setSelectedOpponentRackets([]);
     setSelectedOpponentRateBands([]);
+    setSelectedSeasons([]);
     setDateFilterPreset("all");
     setDateFrom("");
     setDateTo("");
@@ -1729,7 +1793,7 @@ function App() {
 
         const previous = sorted[index - 1];
         const previousRate = Number(previous.myRate);
-        if (Number.isNaN(previousRate)) {
+        if (Number.isNaN(previousRate) || previous.season !== current.season) {
           deltas.set(current.id, null);
           continue;
         }
@@ -1743,6 +1807,19 @@ function App() {
 
   const baseColumns = useMemo<GridColDef<MatchRecord>[]>(
     () => [
+      {
+        field: "season",
+        headerName: "シーズン",
+        minWidth: 92,
+        width: 98,
+        maxWidth: 106,
+        flex: 0,
+        align: "center",
+        headerAlign: "center",
+        renderCell: (params: GridRenderCellParams<MatchRecord, MatchRecord["season"]>) => (
+          <span style={rateCellTextSx}>{params.row.season}</span>
+        )
+      },
       {
         field: "playedAt",
         headerName: "試合日時",
@@ -2152,9 +2229,10 @@ function App() {
   );
 
   const resolvedColumnOrder = useMemo(() => {
-    const savedOrder = columnOrder.filter((field) => columnByField.has(field));
-    const missingFields = defaultColumnOrder.filter((field) => !savedOrder.includes(field));
-    return [...savedOrder, ...missingFields];
+    return mergeColumnOrderWithDefaults(
+      columnOrder.filter((field) => columnByField.has(field)),
+      defaultColumnOrder
+    );
   }, [columnByField, columnOrder, defaultColumnOrder]);
 
   const orderedColumns = useMemo(
@@ -2172,9 +2250,7 @@ function App() {
 
   useEffect(() => {
     setColumnOrder((prev) => {
-      const normalized = prev.filter((field) => defaultColumnOrder.includes(field));
-      const missing = defaultColumnOrder.filter((field) => !normalized.includes(field));
-      const merged = [...normalized, ...missing];
+      const merged = mergeColumnOrderWithDefaults(prev, defaultColumnOrder);
       if (merged.length === prev.length && merged.every((field, index) => field === prev[index])) {
         return prev;
       }
@@ -3009,6 +3085,33 @@ function App() {
                     <Checkbox size="small" checked={selectedOpponentRateBands.includes(option)} />
                     <ListItemText
                       primary={`${option} (${filterOptionCounts.opponentRateBandCounts.get(option) ?? 0})`}
+                    />
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" fullWidth>
+              <InputLabel id="filter-season-label">シーズン</InputLabel>
+              <Select
+                labelId="filter-season-label"
+                multiple
+                value={selectedSeasons}
+                onChange={(event) =>
+                  setSelectedSeasons(
+                    typeof event.target.value === "string"
+                      ? event.target.value.split(",")
+                      : (event.target.value as string[])
+                  )
+                }
+                input={<OutlinedInput label="シーズン" />}
+                renderValue={(selected) => (selected as string[]).join(", ")}
+              >
+                {sortedSeasonFilterOptions.map((option) => (
+                  <MenuItem key={option} value={option}>
+                    <Checkbox size="small" checked={selectedSeasons.includes(option)} />
+                    <ListItemText
+                      primary={`${option} (${filterOptionCounts.seasonCounts.get(option) ?? 0})`}
                     />
                   </MenuItem>
                 ))}

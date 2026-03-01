@@ -6,6 +6,8 @@ from pathlib import Path
 
 from sqlmodel import Session, SQLModel, create_engine
 
+from .season import compute_season_from_played_at, parse_database_datetime
+
 APP_NAME = "mfstat"
 DATABASE_FILE_NAME = "mfstat.db"
 LEGACY_DATABASE_PATH = Path(__file__).resolve().parent.parent / DATABASE_FILE_NAME
@@ -58,6 +60,7 @@ engine = create_engine(DATABASE_URL, echo=False, connect_args={"check_same_threa
 MATCH_RECORD_REQUIRED_COLUMNS = {
     "id",
     "played_at",
+    "season",
     "rule",
     "stage",
     "my_score",
@@ -132,6 +135,33 @@ def _ensure_match_record_partner_rate_band_columns() -> None:
             connection.exec_driver_sql(statement)
 
 
+def _ensure_match_record_season_column() -> None:
+    existing_columns = _match_record_columns()
+    if "season" in existing_columns:
+        return
+
+    with engine.begin() as connection:
+        connection.exec_driver_sql("ALTER TABLE matchrecord ADD COLUMN season TEXT")
+
+
+def _sync_match_record_season_values() -> None:
+    with engine.begin() as connection:
+        rows = connection.exec_driver_sql("SELECT id, played_at, season FROM matchrecord").fetchall()
+        for row in rows:
+            played_at = parse_database_datetime(row[1])
+            if played_at is None:
+                continue
+
+            season = compute_season_from_played_at(played_at)
+            if row[2] == season:
+                continue
+
+            connection.exec_driver_sql(
+                "UPDATE matchrecord SET season = ? WHERE id = ?",
+                (season, row[0])
+            )
+
+
 def _match_record_table_exists() -> bool:
     with engine.connect() as connection:
         result = connection.exec_driver_sql(
@@ -150,7 +180,9 @@ def init_db() -> None:
     if _match_record_table_exists():
         _ensure_match_record_result_column()
         _ensure_match_record_partner_rate_band_columns()
+        _ensure_match_record_season_column()
         _sync_match_record_result_values()
+        _sync_match_record_season_values()
         existing_columns = _match_record_columns()
         if not MATCH_RECORD_REQUIRED_COLUMNS.issubset(existing_columns):
             with engine.begin() as connection:

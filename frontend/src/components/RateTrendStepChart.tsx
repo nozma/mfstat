@@ -8,6 +8,7 @@ type RateTrendStepPoint = {
   rate: number;
   rateBand: string;
   dateKey: string;
+  season: string;
 };
 
 type RateTrendStepSeries = {
@@ -71,26 +72,41 @@ const RateTrendStepChart = ({ series }: RateTrendStepChartProps) => {
 
   const traces = useMemo(
     () =>
-      series.map((entry) => ({
-        type: "scatter",
-        mode: "lines+markers",
-        name: entry.label,
-        x: entry.points.map((point) => formatDateLabel(point.dateKey)),
-        y: entry.points.map((point) => point.rate),
-        customdata: entry.points.map((point) => [
-          formatDateLabel(point.dateKey),
-          formatPlayedAt(point.playedAt),
-          displayRateBand(point.rateBand)
-        ]),
-        line: { color: entry.color, width: 2.2, shape: "hv" as const },
-        marker: {
-          color: entry.color,
-          size: 6,
-          line: { color: "#ffffff", width: 1 }
-        },
-        hovertemplate:
-          "日付: %{customdata[0]}<br>最終対戦日時: %{customdata[1]}<br>レート: %{y}<br>レート帯: %{customdata[2]}<extra>%{fullData.name}</extra>"
-      })),
+      series.flatMap((entry) => {
+        const segments: RateTrendStepPoint[][] = [];
+        entry.points.forEach((point) => {
+          const currentSegment = segments[segments.length - 1];
+          if (!currentSegment || currentSegment[currentSegment.length - 1].season !== point.season) {
+            segments.push([point]);
+            return;
+          }
+          currentSegment.push(point);
+        });
+
+        return segments.map((points, index) => ({
+          type: "scatter",
+          mode: "lines+markers",
+          name: entry.label,
+          legendgroup: entry.rule,
+          showlegend: index === 0,
+          x: points.map((point) => formatDateLabel(point.dateKey)),
+          y: points.map((point) => point.rate),
+          customdata: points.map((point) => [
+            formatDateLabel(point.dateKey),
+            formatPlayedAt(point.playedAt),
+            displayRateBand(point.rateBand),
+            point.season
+          ]),
+          line: { color: entry.color, width: 2.2, shape: "hv" as const },
+          marker: {
+            color: entry.color,
+            size: 6,
+            line: { color: "#ffffff", width: 1 }
+          },
+          hovertemplate:
+            "日付: %{customdata[0]}<br>最終対戦日時: %{customdata[1]}<br>シーズン: %{customdata[3]}<br>レート: %{y}<br>レート帯: %{customdata[2]}<extra>%{fullData.name}</extra>"
+        }));
+      }),
     [series]
   );
 
