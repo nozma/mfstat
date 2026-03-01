@@ -901,6 +901,7 @@ function MatchRecordModal({
     <Dialog
       open={isOpen}
       onClose={isSubmitting ? undefined : onClose}
+      disableScrollLock
       fullWidth
       maxWidth="sm"
       PaperProps={{
