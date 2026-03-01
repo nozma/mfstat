@@ -731,7 +731,9 @@ function App() {
       }
       showSuccessToast(SAVE_SUCCESS_MESSAGE);
 
-      if (!shouldKeepOpenAfterSave) {
+      if (shouldKeepOpenAfterSave) {
+        setCreateModalOpenedAt(Date.now());
+      } else {
         setIsModalOpen(false);
       }
     } catch (error) {
