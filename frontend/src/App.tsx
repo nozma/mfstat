@@ -82,6 +82,7 @@ const RATE_BAND_COLLAPSE_ROW_COUNT = 13;
 const WIN_RATE_MIN_MATCH_COUNT = 5;
 const SAVE_SUCCESS_MESSAGE = "記録を保存しました。";
 const DELETE_SUCCESS_MESSAGE = "記録を削除しました。";
+const ALL_SEASONS_FILTER_VALUE = "";
 
 const pad2 = (value: number) => value.toString().padStart(2, "0");
 
@@ -496,7 +497,7 @@ function App() {
   const [selectedOpponentCharacters, setSelectedOpponentCharacters] = useState<string[]>([]);
   const [selectedOpponentRackets, setSelectedOpponentRackets] = useState<string[]>([]);
   const [selectedOpponentRateBands, setSelectedOpponentRateBands] = useState<string[]>([]);
-  const [selectedSeasons, setSelectedSeasons] = useState<string[]>([]);
+  const [selectedSeason, setSelectedSeason] = useState<string>(ALL_SEASONS_FILTER_VALUE);
   const [dateFilterPreset, setDateFilterPreset] = useState<DateFilterPreset>("all");
   const [summaryViewMode, setSummaryViewMode] = useState<SummaryViewMode>("rate");
   const [showOnlyMinMatchesWinRateStats, setShowOnlyMinMatchesWinRateStats] = useState<boolean>(() => {
@@ -947,7 +948,7 @@ function App() {
       ) {
         return false;
       }
-      if (ignore !== "season" && selectedSeasons.length > 0 && !selectedSeasons.includes(record.season)) {
+      if (ignore !== "season" && selectedSeason.length > 0 && record.season !== selectedSeason) {
         return false;
       }
 
@@ -989,6 +990,8 @@ function App() {
       }
     });
 
+    const allSeasonsCount = records.filter((record) => matchesOtherFilters(record, "season")).length;
+
     return {
       ruleCounts,
       stageCounts,
@@ -997,7 +1000,8 @@ function App() {
       opponentCharacterCounts,
       opponentRacketCounts,
       opponentRateBandCounts,
-      seasonCounts
+      seasonCounts,
+      allSeasonsCount
     };
   }, [
     dateRangeFilter.from,
@@ -1008,7 +1012,7 @@ function App() {
     selectedOpponentCharacters,
     selectedOpponentRackets,
     selectedOpponentRateBands,
-    selectedSeasons,
+    selectedSeason,
     selectedRules,
     selectedStages
   ]);
@@ -1120,7 +1124,7 @@ function App() {
         ) {
           return false;
         }
-        if (selectedSeasons.length > 0 && !selectedSeasons.includes(record.season)) {
+        if (selectedSeason.length > 0 && record.season !== selectedSeason) {
           return false;
         }
 
@@ -1143,7 +1147,7 @@ function App() {
       selectedOpponentCharacters,
       selectedOpponentRackets,
       selectedOpponentRateBands,
-      selectedSeasons,
+      selectedSeason,
       selectedRules,
       selectedStages
     ]
@@ -1156,7 +1160,7 @@ function App() {
     Number(selectedOpponentCharacters.length > 0) +
     Number(selectedOpponentRackets.length > 0) +
     Number(selectedOpponentRateBands.length > 0) +
-    Number(selectedSeasons.length > 0) +
+    Number(selectedSeason.length > 0) +
     Number(dateRangeFilter.from !== null || dateRangeFilter.to !== null);
   const summary = useMemo(() => {
     const total = filteredRecords.length;
@@ -1164,6 +1168,25 @@ function App() {
     const winRate = total > 0 ? (winCount / total) * 100 : null;
     return { total, winCount, winRate };
   }, [filteredRecords]);
+  const trendFilteredRecords = useMemo(
+    () =>
+      records.filter((record) => {
+        if (selectedSeason.length > 0 && record.season !== selectedSeason) {
+          return false;
+        }
+
+        const playedAtTs = parsePlayedAtTimestamp(record.playedAt);
+        if (dateRangeFilter.from !== null && playedAtTs < dateRangeFilter.from) {
+          return false;
+        }
+        if (dateRangeFilter.to !== null && playedAtTs > dateRangeFilter.to) {
+          return false;
+        }
+
+        return true;
+      }),
+    [dateRangeFilter.from, dateRangeFilter.to, records, selectedSeason]
+  );
   const opponentRateBandWinStats = useMemo(() => {
     const displayBands = [...RATE_BAND_OPTIONS].reverse();
     return displayBands
@@ -1469,7 +1492,7 @@ function App() {
     );
   };
   const rateTrendSeries = useMemo<RateTrendLineSeries[]>(() => {
-    const samples = records
+    const samples = trendFilteredRecords
       .map((record) => ({
         id: record.id,
         rule: record.rule,
@@ -1508,9 +1531,9 @@ function App() {
       color: RULE_TREND_COLORS[option.value],
       points: pointsByRule.get(option.value) ?? []
     })).filter((series) => series.points.length > 0);
-  }, [records]);
+  }, [trendFilteredRecords]);
   const rateTrendStepSeries = useMemo<RateTrendStepSeries[]>(() => {
-    const samples = records
+    const samples = trendFilteredRecords
       .map((record) => ({
         id: record.id,
         rule: record.rule,
@@ -1593,9 +1616,9 @@ function App() {
         points
       };
     }).filter((series) => series.points.length > 0);
-  }, [records]);
+  }, [trendFilteredRecords]);
   const dailyRateCandles = useMemo<DailyRateCandle[]>(() => {
-    const samples = records
+    const samples = trendFilteredRecords
       .filter((record) => record.rule === selectedTrendRule)
       .map((record) => ({
         id: record.id,
@@ -1653,11 +1676,11 @@ function App() {
     return Array.from(grouped.values())
       .sort((left, right) => left.firstTimestamp - right.firstTimestamp)
       .map(({ firstTimestamp, lastTimestamp, ...candle }) => candle);
-  }, [records, selectedTrendRule]);
+  }, [selectedTrendRule, trendFilteredRecords]);
   const ruleRateOverviewStats = useMemo(
     () =>
       RULE_OPTIONS.map((option) => {
-        const recordsInRule = records.filter((record) => record.rule === option.value);
+        const recordsInRule = filteredRecords.filter((record) => record.rule === option.value);
         const totalMatches = recordsInRule.length;
         const winCount = recordsInRule.filter((record) => record.result === "WIN").length;
         const winRate = totalMatches > 0 ? (winCount / totalMatches) * 100 : null;
@@ -1726,7 +1749,7 @@ function App() {
           totalMatches
         };
       }),
-    [records]
+    [filteredRecords]
   );
   const groupedRuleRateOverviewStats = useMemo(
     () =>
@@ -1750,7 +1773,7 @@ function App() {
     setSelectedOpponentCharacters([]);
     setSelectedOpponentRackets([]);
     setSelectedOpponentRateBands([]);
-    setSelectedSeasons([]);
+    setSelectedSeason(ALL_SEASONS_FILTER_VALUE);
     setDateFilterPreset("all");
     setDateFrom("");
     setDateTo("");
@@ -2420,7 +2443,15 @@ function App() {
 
           <section className="summary-section">
             <div className="summary-header">
-              <h2>集計</h2>
+              <div className="summary-heading">
+                <h2>集計</h2>
+                {selectedSeason.length > 0 && (
+                  <div className="summary-rate-overview-season">
+                    <span className="summary-rate-overview-season-label">シーズン</span>
+                    <strong>{selectedSeason}</strong>
+                  </div>
+                )}
+              </div>
               <div className="summary-view-controls">
                 <div className="summary-view-switcher" aria-label="集計表示切替">
                   <button
@@ -2520,7 +2551,10 @@ function App() {
                   </div>
                   <div className="summary-rate-overview-stack">
                     {groupedRuleRateOverviewStats.map((group) => (
-                      <div key={`rate-overview-group-${group.key}`} className="summary-card summary-rate-overview-card">
+                      <div
+                        key={`rate-overview-group-${group.key}`}
+                        className="summary-card summary-rate-overview-card"
+                      >
                         <p className="summary-rate-overview-rule">
                           {group.ruleTypeLabel}
                         </p>
@@ -3095,21 +3129,16 @@ function App() {
               <InputLabel id="filter-season-label">シーズン</InputLabel>
               <Select
                 labelId="filter-season-label"
-                multiple
-                value={selectedSeasons}
-                onChange={(event) =>
-                  setSelectedSeasons(
-                    typeof event.target.value === "string"
-                      ? event.target.value.split(",")
-                      : (event.target.value as string[])
-                  )
-                }
+                value={selectedSeason}
+                label="シーズン"
+                onChange={(event) => setSelectedSeason(event.target.value)}
                 input={<OutlinedInput label="シーズン" />}
-                renderValue={(selected) => (selected as string[]).join(", ")}
               >
+                <MenuItem value={ALL_SEASONS_FILTER_VALUE}>
+                  <ListItemText primary={`絞り込みなし (${filterOptionCounts.allSeasonsCount})`} />
+                </MenuItem>
                 {sortedSeasonFilterOptions.map((option) => (
                   <MenuItem key={option} value={option}>
-                    <Checkbox size="small" checked={selectedSeasons.includes(option)} />
                     <ListItemText
                       primary={`${option} (${filterOptionCounts.seasonCounts.get(option) ?? 0})`}
                     />

@@ -159,6 +159,13 @@ body {
   margin: 0;
 }
 
+.summary-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
 .summary-header {
   display: flex;
   align-items: flex-start;
@@ -265,6 +272,36 @@ body {
   gap: 0.65rem;
   align-content: start;
   width: max-content;
+}
+
+.summary-rate-overview-season {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: auto;
+  padding: 0.34rem 0.62rem;
+  color: #4f6574;
+  white-space: nowrap;
+  border: 1px solid #bfd7de;
+  border-radius: 999px;
+  background: #e8f4f7;
+  line-height: 1.2;
+}
+
+.summary-rate-overview-season-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #5f7d85;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+}
+
+.summary-rate-overview-season strong {
+  color: #1f5a68;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
 .summary-rate-overview-card {
