@@ -2,6 +2,29 @@
 
 マリオテニスフィーバーのランクマッチ結果を記録する、個人向けローカルWebアプリです。
 
+## リリース版のダウンロードと使い方
+
+最新版の一覧: [GitHub Releases](https://github.com/nozma/mfstat/releases/latest)
+
+- macOS (Apple Silicon): [MFStat-macos-arm64.zip](https://github.com/nozma/mfstat/releases/latest/download/MFStat-macos-arm64.zip)
+- macOS (Intel): [MFStat-macos-x86_64.zip](https://github.com/nozma/mfstat/releases/latest/download/MFStat-macos-x86_64.zip)
+- Windows (x64): [MFStat-windows-x64.zip](https://github.com/nozma/mfstat/releases/latest/download/MFStat-windows-x64.zip)
+
+### 使い方
+1. 環境に合った zip ファイルをダウンロードします。
+2. zip を解凍します。
+3. macOS は `MFStat.app`、Windows は `MFStat.exe` を起動します。
+
+### 起動時の注意
+- 配布ファイルにはコード署名がないため、初回起動時に OS の警告が表示される場合があります。
+
+#### macOS
+- macOS で `開発元を確認できないため開けません` と表示された場合は、Finder で `MFStat.app` を右クリックして `開く` を選び、確認ダイアログから起動してください。
+- それでも起動できない場合は、`システム設定 > プライバシーとセキュリティ` でブロックされたアプリの実行を許可してください。
+
+#### Windows
+- Windows で SmartScreen の警告が表示された場合は、`詳細情報` から `実行` を選んで起動してください。
+
 ## 技術スタック
 - Frontend: React + Vite + TypeScript
 - Backend: FastAPI + SQLModel
