@@ -66,6 +66,7 @@ type MatchRecordModalProps = {
 };
 
 const PLAYER_NAME_RECORDING_STORAGE_KEY = "mfstat.modal.playerNameRecording";
+const USAGE_SORTING_STORAGE_KEY = "mfstat.modal.usageSorting";
 const DEFAULT_INITIAL_RATE = "2000";
 const DEFAULT_INITIAL_RATE_BAND = RATE_BAND_OPTIONS[0];
 
@@ -151,6 +152,70 @@ const buildUsageStats = (records: MatchRecordValues[], key: keyof MatchRecordVal
   return stats;
 };
 
+const PARTNER_AND_OPPONENT_CHARACTER_KEYS: Array<
+  "opponentCharacter" | "myPartnerCharacter" | "opponentPartnerCharacter"
+> = ["opponentCharacter", "myPartnerCharacter", "opponentPartnerCharacter"];
+
+const buildCombinedCharacterUsageStats = (records: MatchRecordValues[]) => {
+  const stats = new Map<string, UsageStat>();
+
+  records.forEach((record) => {
+    const timestamp = parsePlayedAt(record.playedAt);
+
+    PARTNER_AND_OPPONENT_CHARACTER_KEYS.forEach((key) => {
+      const value = record[key].trim();
+      if (value.length === 0) {
+        return;
+      }
+
+      const current = stats.get(value);
+      if (!current) {
+        stats.set(value, { count: 1, latestPlayedAt: timestamp });
+        return;
+      }
+
+      stats.set(value, {
+        count: current.count + 1,
+        latestPlayedAt: Math.max(current.latestPlayedAt, timestamp)
+      });
+    });
+  });
+
+  return stats;
+};
+
+const PARTNER_AND_OPPONENT_RACKET_KEYS: Array<
+  "opponentRacket" | "myPartnerRacket" | "opponentPartnerRacket"
+> = ["opponentRacket", "myPartnerRacket", "opponentPartnerRacket"];
+
+const buildCombinedRacketUsageStats = (records: MatchRecordValues[]) => {
+  const stats = new Map<string, UsageStat>();
+
+  records.forEach((record) => {
+    const timestamp = parsePlayedAt(record.playedAt);
+
+    PARTNER_AND_OPPONENT_RACKET_KEYS.forEach((key) => {
+      const value = record[key].trim();
+      if (value.length === 0) {
+        return;
+      }
+
+      const current = stats.get(value);
+      if (!current) {
+        stats.set(value, { count: 1, latestPlayedAt: timestamp });
+        return;
+      }
+
+      stats.set(value, {
+        count: current.count + 1,
+        latestPlayedAt: Math.max(current.latestPlayedAt, timestamp)
+      });
+    });
+  });
+
+  return stats;
+};
+
 const sortCharacterOptions = (stats: Map<string, UsageStat>): typeof CHARACTER_OPTIONS => {
   return [...CHARACTER_OPTIONS].sort((left, right) => {
     const leftStat = stats.get(left.value);
@@ -170,6 +235,10 @@ const sortCharacterOptions = (stats: Map<string, UsageStat>): typeof CHARACTER_O
   });
 };
 
+const sortCharacterOptionsAlphabetically = (): typeof CHARACTER_OPTIONS => {
+  return [...CHARACTER_OPTIONS].sort((left, right) => left.label.localeCompare(right.label, "ja"));
+};
+
 const sortRacketOptions = (stats: Map<string, UsageStat>) => {
   return [...RACKET_OPTIONS].sort((left, right) => {
     const leftStat = stats.get(left);
@@ -187,6 +256,10 @@ const sortRacketOptions = (stats: Map<string, UsageStat>) => {
 
     return left.localeCompare(right, "ja");
   });
+};
+
+const sortRacketOptionsAlphabetically = () => {
+  return [...RACKET_OPTIONS].sort((left, right) => left.localeCompare(right, "ja"));
 };
 
 const shiftRateValue = (current: string, amount: number) => {
@@ -428,6 +501,16 @@ function MatchRecordModal({
     }
     return true;
   });
+  const [isUsageSortingEnabled, setIsUsageSortingEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    const saved = window.localStorage.getItem(USAGE_SORTING_STORAGE_KEY);
+    if (saved === "false") {
+      return false;
+    }
+    return true;
+  });
   const [validationToastMessage, setValidationToastMessage] = useState<string | null>(null);
 
   const selectedRule = RULE_OPTIONS.find((option) => option.value === values.rule) ?? RULE_OPTIONS[0];
@@ -460,11 +543,35 @@ function MatchRecordModal({
 
     return stats;
   }, [historyRecords]);
+  const latestMyRacketByRule = useMemo(() => {
+    const stats = new Map<RuleOption["value"], { myRacket: string; latestPlayedAt: number }>();
+
+    historyRecords.forEach((record) => {
+      const normalizedMyRacket = record.myRacket.trim();
+      if (normalizedMyRacket.length === 0) {
+        return;
+      }
+
+      const playedAt = parsePlayedAt(record.playedAt);
+      const current = stats.get(record.rule);
+      if (!current || playedAt > current.latestPlayedAt) {
+        stats.set(record.rule, {
+          myRacket: normalizedMyRacket,
+          latestPlayedAt: playedAt
+        });
+      }
+    });
+
+    return stats;
+  }, [historyRecords]);
   const initialStatsForSelectedRule = latestStatsByRule.get(selectedRule.value);
   const initialMyRateForSelectedRule = initialStatsForSelectedRule?.rate ?? DEFAULT_INITIAL_RATE;
   const initialMyRateBandForSelectedRule =
     initialStatsForSelectedRule?.myRateBand ?? DEFAULT_INITIAL_RATE_BAND;
   const initialOpponentRateBandForSelectedRule = initialMyRateBandForSelectedRule;
+  const initialPartnerRateBandForSelectedRule = initialMyRateBandForSelectedRule;
+  const initialMyRacketForSelectedRule =
+    latestMyRacketByRule.get(selectedRule.value)?.myRacket ?? RACKET_OPTIONS[0];
   const historyRecordsInSelectedRule = useMemo(
     () => historyRecords.filter((record) => record.rule === selectedRule.value),
     [historyRecords, selectedRule.value]
@@ -474,34 +581,60 @@ function MatchRecordModal({
     () => sortCharacterOptions(buildUsageStats(historyRecords, "myCharacter")),
     [historyRecords]
   );
-  const opponentCharacterOptions = useMemo(
-    () => sortCharacterOptions(buildUsageStats(historyRecordsInSelectedRule, "opponentCharacter")),
+  const sharedCharacterUsageStatsInSelectedRule = useMemo(
+    () => buildCombinedCharacterUsageStats(historyRecordsInSelectedRule),
     [historyRecordsInSelectedRule]
   );
-  const myPartnerCharacterOptions = useMemo(
-    () => sortCharacterOptions(buildUsageStats(historyRecords, "myPartnerCharacter")),
-    [historyRecords]
+  const sharedCharacterOptionsInSelectedRule = useMemo(
+    () => sortCharacterOptions(sharedCharacterUsageStatsInSelectedRule),
+    [sharedCharacterUsageStatsInSelectedRule]
   );
-  const opponentPartnerCharacterOptions = useMemo(
-    () => sortCharacterOptions(buildUsageStats(historyRecords, "opponentPartnerCharacter")),
-    [historyRecords]
-  );
+  const opponentCharacterOptions = sharedCharacterOptionsInSelectedRule;
+  const myPartnerCharacterOptions = sharedCharacterOptionsInSelectedRule;
+  const opponentPartnerCharacterOptions = sharedCharacterOptionsInSelectedRule;
+  const alphabeticalCharacterOptions = useMemo(() => sortCharacterOptionsAlphabetically(), []);
   const myRacketOptions = useMemo(
-    () => sortRacketOptions(buildUsageStats(historyRecords, "myRacket")),
-    [historyRecords]
-  );
-  const opponentRacketOptions = useMemo(
-    () => sortRacketOptions(buildUsageStats(historyRecordsInSelectedRule, "opponentRacket")),
+    () => sortRacketOptions(buildUsageStats(historyRecordsInSelectedRule, "myRacket")),
     [historyRecordsInSelectedRule]
   );
+  const sharedRacketUsageStatsInSelectedRule = useMemo(
+    () => buildCombinedRacketUsageStats(historyRecordsInSelectedRule),
+    [historyRecordsInSelectedRule]
+  );
+  const sharedRacketOptionsInSelectedRule = useMemo(
+    () => sortRacketOptions(sharedRacketUsageStatsInSelectedRule),
+    [sharedRacketUsageStatsInSelectedRule]
+  );
+  const opponentRacketOptions = sharedRacketOptionsInSelectedRule;
   const myPartnerRacketOptions = useMemo(
-    () => sortRacketOptions(buildUsageStats(historyRecords, "myPartnerRacket")),
-    [historyRecords]
+    () => sharedRacketOptionsInSelectedRule,
+    [sharedRacketOptionsInSelectedRule]
   );
   const opponentPartnerRacketOptions = useMemo(
-    () => sortRacketOptions(buildUsageStats(historyRecords, "opponentPartnerRacket")),
-    [historyRecords]
+    () => sharedRacketOptionsInSelectedRule,
+    [sharedRacketOptionsInSelectedRule]
   );
+  const alphabeticalRacketOptions = useMemo(() => sortRacketOptionsAlphabetically(), []);
+  const displayedMyCharacterOptions = isUsageSortingEnabled ? myCharacterOptions : alphabeticalCharacterOptions;
+  const displayedOpponentCharacterOptions = isUsageSortingEnabled
+    ? opponentCharacterOptions
+    : alphabeticalCharacterOptions;
+  const displayedMyPartnerCharacterOptions = isUsageSortingEnabled
+    ? myPartnerCharacterOptions
+    : alphabeticalCharacterOptions;
+  const displayedOpponentPartnerCharacterOptions = isUsageSortingEnabled
+    ? opponentPartnerCharacterOptions
+    : alphabeticalCharacterOptions;
+  const displayedMyRacketOptions = isUsageSortingEnabled ? myRacketOptions : alphabeticalRacketOptions;
+  const displayedOpponentRacketOptions = isUsageSortingEnabled
+    ? opponentRacketOptions
+    : alphabeticalRacketOptions;
+  const displayedMyPartnerRacketOptions = isUsageSortingEnabled
+    ? myPartnerRacketOptions
+    : alphabeticalRacketOptions;
+  const displayedOpponentPartnerRacketOptions = isUsageSortingEnabled
+    ? opponentPartnerRacketOptions
+    : alphabeticalRacketOptions;
   const stageOptions = useMemo(() => {
     if (values.stage.length > 0 && !STAGE_OPTIONS.includes(values.stage)) {
       return [values.stage, ...STAGE_OPTIONS];
@@ -543,6 +676,10 @@ function MatchRecordModal({
   }, [isPlayerNameRecordingEnabled]);
 
   useEffect(() => {
+    window.localStorage.setItem(USAGE_SORTING_STORAGE_KEY, String(isUsageSortingEnabled));
+  }, [isUsageSortingEnabled]);
+
+  useEffect(() => {
     if (!isOpen) {
       setValidationToastMessage(null);
     }
@@ -577,7 +714,10 @@ function MatchRecordModal({
       if (
         prev.myRate === initialMyRateForSelectedRule &&
         prev.myRateBand === initialMyRateBandForSelectedRule &&
-        prev.opponentRateBand === initialOpponentRateBandForSelectedRule
+        prev.opponentRateBand === initialOpponentRateBandForSelectedRule &&
+        prev.myPartnerRateBand === initialPartnerRateBandForSelectedRule &&
+        prev.opponentPartnerRateBand === initialPartnerRateBandForSelectedRule &&
+        prev.myRacket === initialMyRacketForSelectedRule
       ) {
         return prev;
       }
@@ -585,10 +725,15 @@ function MatchRecordModal({
         ...prev,
         myRate: initialMyRateForSelectedRule,
         myRateBand: initialMyRateBandForSelectedRule,
-        opponentRateBand: initialOpponentRateBandForSelectedRule
+        opponentRateBand: initialOpponentRateBandForSelectedRule,
+        myPartnerRateBand: initialPartnerRateBandForSelectedRule,
+        opponentPartnerRateBand: initialPartnerRateBandForSelectedRule,
+        myRacket: initialMyRacketForSelectedRule
       };
     });
   }, [
+    initialMyRacketForSelectedRule,
+    initialPartnerRateBandForSelectedRule,
     initialMyRateForSelectedRule,
     initialMyRateBandForSelectedRule,
     initialOpponentRateBandForSelectedRule,
@@ -602,37 +747,37 @@ function MatchRecordModal({
       return;
     }
 
-    const firstMyPartner = myPartnerCharacterOptions[0]?.value ?? CHARACTER_OPTIONS[0].value;
-    const firstOpponent = opponentCharacterOptions[0]?.value ?? CHARACTER_OPTIONS[0].value;
-    const firstOpponentPartner =
-      opponentPartnerCharacterOptions[0]?.value ?? CHARACTER_OPTIONS[0].value;
-    const firstOpponentRacket = opponentRacketOptions[0] ?? RACKET_OPTIONS[0];
+    const firstSharedCharacter =
+      sharedCharacterOptionsInSelectedRule[0]?.value ?? CHARACTER_OPTIONS[0].value;
+    const firstSharedRacket = sharedRacketOptionsInSelectedRule[0] ?? RACKET_OPTIONS[0];
 
     setValues((prev) => {
       if (
-        prev.myPartnerCharacter === firstMyPartner &&
-        prev.opponentCharacter === firstOpponent &&
-        prev.opponentPartnerCharacter === firstOpponentPartner &&
-        prev.opponentRacket === firstOpponentRacket
+        prev.myPartnerCharacter === firstSharedCharacter &&
+        prev.opponentCharacter === firstSharedCharacter &&
+        prev.opponentPartnerCharacter === firstSharedCharacter &&
+        prev.opponentRacket === firstSharedRacket &&
+        prev.myPartnerRacket === firstSharedRacket &&
+        prev.opponentPartnerRacket === firstSharedRacket
       ) {
         return prev;
       }
 
       return {
         ...prev,
-        myPartnerCharacter: firstMyPartner,
-        opponentCharacter: firstOpponent,
-        opponentPartnerCharacter: firstOpponentPartner,
-        opponentRacket: firstOpponentRacket
+        myPartnerCharacter: firstSharedCharacter,
+        opponentCharacter: firstSharedCharacter,
+        opponentPartnerCharacter: firstSharedCharacter,
+        opponentRacket: firstSharedRacket,
+        myPartnerRacket: firstSharedRacket,
+        opponentPartnerRacket: firstSharedRacket
       };
     });
   }, [
     isOpen,
     mode,
-    myPartnerCharacterOptions,
-    opponentCharacterOptions,
-    opponentPartnerCharacterOptions,
-    opponentRacketOptions
+    sharedCharacterOptionsInSelectedRule,
+    sharedRacketOptionsInSelectedRule
   ]);
 
   const modalTitle = mode === "create" ? "記録を登録" : "記録を編集";
@@ -810,6 +955,16 @@ function MatchRecordModal({
                 }
                 label="プレイヤー名記録"
               />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={isUsageSortingEnabled}
+                    onChange={(event) => setIsUsageSortingEnabled(event.target.checked)}
+                  />
+                }
+                label="ラケット・キャラを使用回数順で表示"
+              />
             </Box>
           </Collapse>
         </Stack>
@@ -967,7 +1122,7 @@ function MatchRecordModal({
                     required
                     sx={fieldWidthSx.character}
                   >
-                    {opponentCharacterOptions.map((option) => (
+                    {displayedOpponentCharacterOptions.map((option) => (
                       <MenuItem key={option.value} value={option.value}>
                         {option.label}
                       </MenuItem>
@@ -988,7 +1143,7 @@ function MatchRecordModal({
                       required
                       sx={fieldWidthSx.racket}
                     >
-                      {opponentRacketOptions.map((option) => (
+                      {displayedOpponentRacketOptions.map((option) => (
                         <MenuItem key={option} value={option}>
                           {option}
                         </MenuItem>
@@ -1010,7 +1165,7 @@ function MatchRecordModal({
                       required
                       sx={fieldWidthSx.character}
                     >
-                      {opponentPartnerCharacterOptions.map((option) => (
+                      {displayedOpponentPartnerCharacterOptions.map((option) => (
                         <MenuItem key={option.value} value={option.value}>
                         {option.label}
                       </MenuItem>
@@ -1035,7 +1190,7 @@ function MatchRecordModal({
                       required
                       sx={fieldWidthSx.character}
                     >
-                      {opponentPartnerCharacterOptions.map((option) => (
+                      {displayedOpponentPartnerCharacterOptions.map((option) => (
                         <MenuItem key={option.value} value={option.value}>
                           {option.label}
                         </MenuItem>
@@ -1055,7 +1210,7 @@ function MatchRecordModal({
                       required
                       sx={fieldWidthSx.racket}
                     >
-                      {opponentPartnerRacketOptions.map((option) => (
+                      {displayedOpponentPartnerRacketOptions.map((option) => (
                         <MenuItem key={option} value={option}>
                           {option}
                         </MenuItem>
@@ -1141,7 +1296,7 @@ function MatchRecordModal({
                     required
                     sx={fieldWidthSx.character}
                   >
-                    {myCharacterOptions.map((option) => (
+                    {displayedMyCharacterOptions.map((option) => (
                       <MenuItem key={option.value} value={option.value}>
                         {option.label}
                       </MenuItem>
@@ -1162,7 +1317,7 @@ function MatchRecordModal({
                       required
                       sx={fieldWidthSx.racket}
                     >
-                      {myRacketOptions.map((option) => (
+                      {displayedMyRacketOptions.map((option) => (
                         <MenuItem key={option} value={option}>
                           {option}
                         </MenuItem>
@@ -1184,7 +1339,7 @@ function MatchRecordModal({
                       required
                       sx={fieldWidthSx.character}
                     >
-                      {myPartnerCharacterOptions.map((option) => (
+                      {displayedMyPartnerCharacterOptions.map((option) => (
                         <MenuItem key={option.value} value={option.value}>
                         {option.label}
                       </MenuItem>
@@ -1209,7 +1364,7 @@ function MatchRecordModal({
                       required
                       sx={fieldWidthSx.character}
                     >
-                      {myPartnerCharacterOptions.map((option) => (
+                      {displayedMyPartnerCharacterOptions.map((option) => (
                         <MenuItem key={option.value} value={option.value}>
                           {option.label}
                         </MenuItem>
@@ -1229,7 +1384,7 @@ function MatchRecordModal({
                       required
                       sx={fieldWidthSx.racket}
                     >
-                      {myPartnerRacketOptions.map((option) => (
+                      {displayedMyPartnerRacketOptions.map((option) => (
                         <MenuItem key={option} value={option}>
                           {option}
                         </MenuItem>
