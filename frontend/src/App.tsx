@@ -55,6 +55,7 @@ import {
   RULE_OPTIONS,
   STAGE_OPTIONS
 } from "./constants/options";
+import { getRateBandChipToneSx } from "./constants/rateBandTone";
 
 const COLUMN_VISIBILITY_STORAGE_KEY = "mfstat.recordGrid.columnVisibility";
 const COLUMN_ORDER_STORAGE_KEY = "mfstat.recordGrid.columnOrder";
@@ -350,20 +351,6 @@ const compactRateBandChipSx = {
   fontSize: "0.62rem",
   "& .MuiChip-label": { px: 0.45 }
 } as const;
-
-const getRateBandChipToneSx = (rateBand: string) => {
-  const tier = rateBand.trim().charAt(0).toUpperCase();
-  if (tier === "S") {
-    return { backgroundColor: "#fbe3e2", color: "#8c1d18", borderColor: "#f0b3af" } as const;
-  }
-  if (tier === "A") {
-    return { backgroundColor: "#fef0db", color: "#88510d", borderColor: "#f3d4a7" } as const;
-  }
-  if (tier === "B") {
-    return { backgroundColor: "#e3f1ff", color: "#114d93", borderColor: "#b7d7fb" } as const;
-  }
-  return { backgroundColor: "#e8edf1", color: "#41505c", borderColor: "#c5d0d9" } as const;
-};
 
 const compactHeaderLabelSx = {
   display: "inline-flex",

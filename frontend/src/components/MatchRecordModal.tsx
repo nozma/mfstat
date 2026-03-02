@@ -26,6 +26,7 @@ import {
   RuleOption,
   STAGE_OPTIONS
 } from "../constants/options";
+import { getRateBandButtonToneSx } from "../constants/rateBandTone";
 
 export type MatchRecordValues = {
   playedAt: string;
@@ -864,30 +865,12 @@ function MatchRecordModal({
           <Button
             key={`${ariaLabel}-${option}`}
             type="button"
-            variant={isSelected ? "contained" : "outlined"}
+            variant="outlined"
             onClick={() => onSelect(option)}
             aria-pressed={isSelected}
             sx={{
               ...opponentRateBandButtonSx,
-              ...(isSelected
-                ? {
-                    backgroundColor: "#1e5b82",
-                    borderColor: "#1e5b82",
-                    color: "#fff",
-                    "&:hover": {
-                      backgroundColor: "#184b6c",
-                      borderColor: "#184b6c"
-                    }
-                  }
-                : {
-                    backgroundColor: "#fff",
-                    borderColor: "#b8c9d7",
-                    color: "#2d4f67",
-                    "&:hover": {
-                      borderColor: "#8ca9be",
-                      backgroundColor: "#f4f8fc"
-                    }
-                  })
+              ...getRateBandButtonToneSx(option, isSelected)
             }}
           >
             {option}
