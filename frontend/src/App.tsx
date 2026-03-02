@@ -1006,17 +1006,8 @@ function App() {
     selectedStages
   ]);
   const sortedSeasonFilterOptions = useMemo(
-    () =>
-      [...seasonFilterOptions].sort((left, right) => {
-        const countDiff =
-          (filterOptionCounts.seasonCounts.get(right) ?? 0) -
-          (filterOptionCounts.seasonCounts.get(left) ?? 0);
-        if (countDiff !== 0) {
-          return countDiff;
-        }
-        return compareSeasonStringsDesc(left, right);
-      }),
-    [filterOptionCounts.seasonCounts, seasonFilterOptions]
+    () => [...seasonFilterOptions].sort(compareSeasonStringsDesc),
+    [seasonFilterOptions]
   );
   const sortedStageFilterOptions = useMemo(
     () =>
