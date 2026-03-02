@@ -12,6 +12,8 @@ if [[ -z "${MFSTAT_APP_VERSION:-}" ]]; then
 fi
 
 export VITE_APP_VERSION="${MFSTAT_APP_VERSION}"
+BACKEND_PORT="${MFSTAT_BACKEND_PORT:-8000}"
+FRONTEND_PORT="${MFSTAT_FRONTEND_PORT:-5173}"
 
 cleanup() {
   if [[ -n "${BACKEND_PID:-}" ]]; then
@@ -22,6 +24,27 @@ cleanup() {
   fi
 }
 
+stop_listeners_on_port() {
+  local port="$1"
+  local pids
+
+  if ! command -v lsof >/dev/null 2>&1; then
+    return
+  fi
+
+  pids="$(lsof -tiTCP:"${port}" -sTCP:LISTEN 2>/dev/null || true)"
+  if [[ -z "${pids}" ]]; then
+    return
+  fi
+
+  echo "Stopping existing process on port ${port}: ${pids//$'\n'/ }"
+  while IFS= read -r pid; do
+    if [[ -n "${pid}" ]]; then
+      kill "${pid}" 2>/dev/null || true
+    fi
+  done <<< "${pids}"
+}
+
 trap cleanup EXIT INT TERM
 
 BACKEND_UVICORN="uvicorn"
@@ -29,16 +52,19 @@ if [[ -x "backend/.venv/bin/uvicorn" ]]; then
   BACKEND_UVICORN="./.venv/bin/uvicorn"
 fi
 
+stop_listeners_on_port "${BACKEND_PORT}"
+stop_listeners_on_port "${FRONTEND_PORT}"
+
 (
   cd backend
-  "${BACKEND_UVICORN}" app.main:app --reload --host 0.0.0.0 --port 8000
+  "${BACKEND_UVICORN}" app.main:app --reload --host 0.0.0.0 --port "${BACKEND_PORT}"
 ) &
 BACKEND_PID=$!
 
 (
   cd frontend
   echo "Starting frontend with version: ${VITE_APP_VERSION}"
-  npm run dev -- --host 0.0.0.0 --port 5173
+  npm run dev -- --host 0.0.0.0 --port "${FRONTEND_PORT}"
 ) &
 FRONTEND_PID=$!
 
