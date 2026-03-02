@@ -56,7 +56,7 @@ npm install
 make dev
 ```
 
-- Frontend: `http://localhost:5173`
+- Frontend: `http://localhost:5180`
 - Backend API: `http://localhost:8000`
 
 ## デスクトップ起動

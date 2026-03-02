@@ -24,9 +24,9 @@ def _resolve_cors_origins() -> list[str]:
     if configured:
         return [origin.strip() for origin in configured.split(",") if origin.strip()]
     return [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://0.0.0.0:5173",
+        "http://localhost:5180",
+        "http://127.0.0.1:5180",
+        "http://0.0.0.0:5180",
         "http://localhost:8000",
         "http://127.0.0.1:8000",
         "http://0.0.0.0:8000"
