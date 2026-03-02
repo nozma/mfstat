@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import Plotly from "plotly.js-dist-min";
+import { buildSeasonBands } from "./rateTrendSeasonBands";
 
 type RateTrendLinePoint = {
   id: number;
@@ -20,6 +21,8 @@ type RateTrendLineSeries = {
 type RateTrendLineChartProps = {
   series: RateTrendLineSeries[];
 };
+
+const HALF_DAY_MS = 12 * 60 * 60 * 1000;
 
 const pad2 = (value: number) => value.toString().padStart(2, "0");
 
@@ -81,6 +84,18 @@ const RateTrendLineChart = ({ series }: RateTrendLineChartProps) => {
     [series]
   );
 
+  const seasonBands = useMemo(
+    () =>
+      buildSeasonBands(series.flatMap((entry) => entry.points)).map((band, index, bands) => ({
+        ...band,
+        startTimestamp: index === 0 ? band.startTimestamp - HALF_DAY_MS : band.startTimestamp,
+        endTimestamp:
+          index === bands.length - 1 ? band.endTimestamp + HALF_DAY_MS : band.endTimestamp,
+        labelTimestamp: band.labelTimestamp
+      })),
+    [series]
+  );
+
   useEffect(() => {
     const chartRoot = chartRootRef.current;
     if (!chartRoot) {
@@ -95,6 +110,29 @@ const RateTrendLineChart = ({ series }: RateTrendLineChartProps) => {
       dragmode: "pan",
       hovermode: "closest",
       showlegend: true,
+      shapes: seasonBands.map((band, index) => ({
+        type: "rect",
+        xref: "x",
+        yref: "paper",
+        x0: band.startTimestamp,
+        x1: band.endTimestamp,
+        y0: 0,
+        y1: 1,
+        fillcolor: band.fillColor,
+        line: { width: index === 0 ? 0 : 1, color: "rgba(205, 216, 226, 0.28)" },
+        layer: "below"
+      })),
+      annotations: seasonBands.map((band) => ({
+        xref: "x",
+        yref: "paper",
+        x: band.labelTimestamp,
+        y: 0.93,
+        text: band.season,
+        showarrow: false,
+        font: { size: 24, color: "rgba(104, 125, 141, 0.18)" },
+        xanchor: "center",
+        yanchor: "middle"
+      })),
       legend: {
         orientation: "h",
         x: 0,
@@ -107,7 +145,7 @@ const RateTrendLineChart = ({ series }: RateTrendLineChartProps) => {
         type: "date",
         showgrid: true,
         gridcolor: "#e4edf3",
-        tickformat: "%H:%M\n%Y年%-m月%-d日",
+        tickformat: "%H:%M\n%-d日",
         tickfont: { color: "#607684", size: 11 }
       },
       yaxis: {
@@ -129,7 +167,7 @@ const RateTrendLineChart = ({ series }: RateTrendLineChartProps) => {
     requestAnimationFrame(() => {
       Plotly.Plots?.resize?.(chartRoot);
     });
-  }, [traces]);
+  }, [seasonBands, traces]);
 
   useEffect(() => {
     const chartRoot = chartRootRef.current;

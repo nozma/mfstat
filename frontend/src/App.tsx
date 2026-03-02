@@ -421,16 +421,34 @@ const RULE_TREND_COLORS: Record<MatchRecordValues["rule"], string> = {
   doubles_fever_on: "#ef6c00",
   doubles_fever_off: "#6a1b9a"
 };
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const toDateKey = (timestamp: number) => {
-  const date = new Date(timestamp);
+  let shiftedTimestamp = timestamp + JST_OFFSET_MS;
+  let date = new Date(shiftedTimestamp);
   if (Number.isNaN(date.getTime())) {
     return "";
   }
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+
+  // Records before 09:00 JST on the first day of a month are aggregated into the previous month's last day.
+  if (date.getUTCDate() === 1 && date.getUTCHours() < 9) {
+    shiftedTimestamp -= DAY_MS;
+    date = new Date(shiftedTimestamp);
+  }
+
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
 };
 const toDateStartTimestamp = (dateKey: string) => {
-  const timestamp = new Date(`${dateKey}T00:00:00`).getTime();
+  const match = dateKey.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return 0;
+  }
+
+  const year = Number.parseInt(match[1], 10);
+  const month = Number.parseInt(match[2], 10);
+  const day = Number.parseInt(match[3], 10);
+  const timestamp = Date.UTC(year, month - 1, day, 0, 0, 0, 0) - JST_OFFSET_MS;
   return Number.isNaN(timestamp) ? 0 : timestamp;
 };
 
@@ -1603,7 +1621,8 @@ function App() {
       .map((record) => ({
         id: record.id,
         timestamp: parsePlayedAtTimestamp(record.playedAt),
-        rate: Number(record.myRate)
+        rate: Number(record.myRate),
+        season: record.season
       }))
       .filter((sample) => sample.timestamp > 0 && !Number.isNaN(sample.rate))
       .sort((left, right) => {
@@ -1634,6 +1653,8 @@ function App() {
           low: sample.rate,
           close: sample.rate,
           matches: 1,
+          timestamp: toDateStartTimestamp(dateKey),
+          season: sample.season,
           firstTimestamp: sample.timestamp,
           lastTimestamp: sample.timestamp
         });
@@ -1650,6 +1671,7 @@ function App() {
       if (sample.timestamp >= current.lastTimestamp) {
         current.lastTimestamp = sample.timestamp;
         current.close = sample.rate;
+        current.season = sample.season;
       }
     });
 

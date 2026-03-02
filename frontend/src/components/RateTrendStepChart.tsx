@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import Plotly from "plotly.js-dist-min";
+import { buildDailyAggregatedSeasonBands } from "./rateTrendSeasonBands";
 
 type RateTrendStepPoint = {
   id: number;
@@ -21,6 +22,8 @@ type RateTrendStepSeries = {
 type RateTrendStepChartProps = {
   series: RateTrendStepSeries[];
 };
+
+const HALF_DAY_MS = 12 * 60 * 60 * 1000;
 
 const pad2 = (value: number) => value.toString().padStart(2, "0");
 
@@ -56,19 +59,6 @@ const displayRateBand = (rateBand: string) => {
 
 const RateTrendStepChart = ({ series }: RateTrendStepChartProps) => {
   const chartRootRef = useRef<HTMLDivElement | null>(null);
-  const categoryLabels = useMemo(() => {
-    const labelByDateKey = new Map<string, string>();
-    series.forEach((entry) => {
-      entry.points.forEach((point) => {
-        if (!labelByDateKey.has(point.dateKey)) {
-          labelByDateKey.set(point.dateKey, formatDateLabel(point.dateKey));
-        }
-      });
-    });
-    return Array.from(labelByDateKey.entries())
-      .sort((left, right) => left[0].localeCompare(right[0]))
-      .map((entry) => entry[1]);
-  }, [series]);
 
   const traces = useMemo(
     () =>
@@ -89,7 +79,7 @@ const RateTrendStepChart = ({ series }: RateTrendStepChartProps) => {
           name: entry.label,
           legendgroup: entry.rule,
           showlegend: index === 0,
-          x: points.map((point) => formatDateLabel(point.dateKey)),
+          x: points.map((point) => point.timestamp),
           y: points.map((point) => point.rate),
           customdata: points.map((point) => [
             formatDateLabel(point.dateKey),
@@ -110,6 +100,20 @@ const RateTrendStepChart = ({ series }: RateTrendStepChartProps) => {
     [series]
   );
 
+  const seasonBands = useMemo(
+    () =>
+      buildDailyAggregatedSeasonBands(series.flatMap((entry) => entry.points)).map(
+        (band, index, bands) => ({
+          ...band,
+          startTimestamp: index === 0 ? band.startTimestamp - HALF_DAY_MS : band.startTimestamp,
+          endTimestamp:
+            index === bands.length - 1 ? band.endTimestamp + HALF_DAY_MS : band.endTimestamp,
+          labelTimestamp: band.labelTimestamp
+        })
+      ),
+    [series]
+  );
+
   useEffect(() => {
     const chartRoot = chartRootRef.current;
     if (!chartRoot) {
@@ -124,6 +128,29 @@ const RateTrendStepChart = ({ series }: RateTrendStepChartProps) => {
       dragmode: "pan",
       hovermode: "closest",
       showlegend: true,
+      shapes: seasonBands.map((band, index) => ({
+        type: "rect",
+        xref: "x",
+        yref: "paper",
+        x0: band.startTimestamp,
+        x1: band.endTimestamp,
+        y0: 0,
+        y1: 1,
+        fillcolor: band.fillColor,
+        line: { width: index === 0 ? 0 : 1, color: "rgba(205, 216, 226, 0.28)" },
+        layer: "below"
+      })),
+      annotations: seasonBands.map((band) => ({
+        xref: "x",
+        yref: "paper",
+        x: band.labelTimestamp,
+        y: 0.93,
+        text: band.season,
+        showarrow: false,
+        font: { size: 24, color: "rgba(104, 125, 141, 0.18)" },
+        xanchor: "center",
+        yanchor: "middle"
+      })),
       legend: {
         orientation: "h",
         x: 0,
@@ -133,14 +160,10 @@ const RateTrendStepChart = ({ series }: RateTrendStepChartProps) => {
         font: { color: "#3f5564", size: 11 }
       },
       xaxis: {
-        type: "category",
-        categoryorder: "array",
-        categoryarray: categoryLabels,
+        type: "date",
         showgrid: true,
         gridcolor: "#e4edf3",
-        tickmode: "auto",
-        nticks: 14,
-        automargin: true,
+        tickformat: "%-d日",
         tickfont: { color: "#607684", size: 11 }
       },
       yaxis: {
@@ -162,7 +185,7 @@ const RateTrendStepChart = ({ series }: RateTrendStepChartProps) => {
     requestAnimationFrame(() => {
       Plotly.Plots?.resize?.(chartRoot);
     });
-  }, [categoryLabels, traces]);
+  }, [seasonBands, traces]);
 
   useEffect(() => {
     const chartRoot = chartRootRef.current;

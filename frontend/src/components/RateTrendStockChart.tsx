@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef } from "react";
 import Plotly from "plotly.js-dist-min";
+import { buildDailyAggregatedSeasonBands } from "./rateTrendSeasonBands";
 
 type DailyRateCandle = {
   date: string;
+  timestamp: number;
+  season: string;
   open: number;
   high: number;
   low: number;
@@ -14,6 +17,8 @@ type RateTrendStockChartProps = {
   candles: DailyRateCandle[];
   ruleLabel: string;
 };
+
+const HALF_DAY_MS = 12 * 60 * 60 * 1000;
 
 const toJapaneseDateLabel = (dateKey: string) => {
   const parts = dateKey.split("-");
@@ -32,12 +37,44 @@ const toJapaneseDateLabel = (dateKey: string) => {
 const RateTrendStockChart = ({ candles, ruleLabel }: RateTrendStockChartProps) => {
   const chartRootRef = useRef<HTMLDivElement | null>(null);
 
-  const xValues = useMemo(() => candles.map((item) => toJapaneseDateLabel(item.date)), [candles]);
+  const xValues = useMemo(() => candles.map((item) => item.timestamp), [candles]);
   const openValues = useMemo(() => candles.map((item) => item.open), [candles]);
   const highValues = useMemo(() => candles.map((item) => item.high), [candles]);
   const lowValues = useMemo(() => candles.map((item) => item.low), [candles]);
   const closeValues = useMemo(() => candles.map((item) => item.close), [candles]);
   const volumeValues = useMemo(() => candles.map((item) => item.matches), [candles]);
+  const seasonBands = useMemo(
+    () =>
+      buildDailyAggregatedSeasonBands(
+        candles.map((item, index) => ({
+          id: index,
+          timestamp: item.timestamp,
+          season: item.season
+        }))
+      ).map((band, index, bands) => ({
+        ...band,
+        startTimestamp: index === 0 ? band.startTimestamp - HALF_DAY_MS : band.startTimestamp,
+        endTimestamp:
+          index === bands.length - 1 ? band.endTimestamp + HALF_DAY_MS : band.endTimestamp,
+        labelTimestamp: band.labelTimestamp
+      })),
+    [candles]
+  );
+  const seasonAnnotations = useMemo(
+    () =>
+      seasonBands.map((band) => ({
+        xref: "x",
+        yref: "paper",
+        x: band.labelTimestamp,
+        y: 0.93,
+        text: band.season,
+        showarrow: false,
+        font: { size: 24, color: "rgba(104, 125, 141, 0.18)" },
+        xanchor: "center",
+        yanchor: "middle"
+      })),
+    [seasonBands]
+  );
 
   useEffect(() => {
     const chartRoot = chartRootRef.current;
@@ -73,6 +110,7 @@ const RateTrendStockChart = ({ candles, ruleLabel }: RateTrendStockChartProps) =
         high: highValues,
         low: lowValues,
         close: closeValues,
+        customdata: candles.map((item) => [toJapaneseDateLabel(item.date), item.season]),
         yaxis: "y",
         increasing: {
           line: { color: "#2e7d32" },
@@ -83,7 +121,7 @@ const RateTrendStockChart = ({ candles, ruleLabel }: RateTrendStockChartProps) =
           fillcolor: "#c62828"
         },
         hovertemplate:
-          "%{x}<br>始値: %{open}<br>高値: %{high}<br>安値: %{low}<br>終値: %{close}<extra></extra>"
+          "%{customdata[0]}<br>シーズン: %{customdata[1]}<br>始値: %{open}<br>高値: %{high}<br>安値: %{low}<br>終値: %{close}<extra></extra>"
       },
       {
         type: "bar",
@@ -91,7 +129,8 @@ const RateTrendStockChart = ({ candles, ruleLabel }: RateTrendStockChartProps) =
         y: volumeValues,
         yaxis: "y2",
         marker: { color: "#7ea7c6" },
-        hovertemplate: "%{x}<br>試合数: %{y}<extra></extra>"
+        customdata: candles.map((item) => [toJapaneseDateLabel(item.date), item.season]),
+        hovertemplate: "%{customdata[0]}<br>シーズン: %{customdata[1]}<br>試合数: %{y}<extra></extra>"
       }
     ];
 
@@ -105,10 +144,15 @@ const RateTrendStockChart = ({ candles, ruleLabel }: RateTrendStockChartProps) =
       hovermode: "x unified",
       xaxis: {
         anchor: "y2",
-        type: "category",
+        type: "date",
         rangeslider: { visible: false },
         showgrid: true,
         gridcolor: "#e4edf3",
+        tickmode: "auto",
+        nticks: 10,
+        tickformat: "%-d日",
+        tickangle: 0,
+        automargin: true,
         tickfont: { color: "#607684", size: 11 }
       },
       yaxis: {
@@ -151,6 +195,18 @@ const RateTrendStockChart = ({ candles, ruleLabel }: RateTrendStockChartProps) =
         matches: "y2"
       },
       shapes: [
+        ...seasonBands.map((band, index) => ({
+          type: "rect",
+          xref: "x",
+          yref: "paper",
+          x0: band.startTimestamp,
+          x1: band.endTimestamp,
+          y0: 0,
+          y1: 1,
+          fillcolor: band.fillColor,
+          line: { width: index === 0 ? 0 : 1, color: "rgba(205, 216, 226, 0.28)" },
+          layer: "below"
+        })),
         {
           type: "line",
           xref: "paper",
@@ -166,6 +222,7 @@ const RateTrendStockChart = ({ candles, ruleLabel }: RateTrendStockChartProps) =
         }
       ],
       annotations: [
+        ...seasonAnnotations,
         {
           text: `${ruleLabel} / 日次集計`,
           xref: "paper",
@@ -220,10 +277,13 @@ const RateTrendStockChart = ({ candles, ruleLabel }: RateTrendStockChartProps) =
     });
   }, [
     closeValues,
+    candles,
     highValues,
     lowValues,
     openValues,
     ruleLabel,
+    seasonAnnotations,
+    seasonBands,
     volumeValues,
     xValues
   ]);
