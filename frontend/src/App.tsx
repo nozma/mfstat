@@ -108,32 +108,6 @@ const parsePlayedAtTimestamp = (playedAt: string) => {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 };
 
-const getNextStageRotationTimestamp = (timestamp: number) => {
-  const nextRotation = new Date(timestamp);
-  nextRotation.setSeconds(0, 0);
-
-  if (nextRotation.getMinutes() < 30) {
-    nextRotation.setMinutes(30);
-    return nextRotation.getTime();
-  }
-
-  nextRotation.setHours(nextRotation.getHours() + 1, 0, 0, 0);
-  return nextRotation.getTime();
-};
-
-const shouldResetStageSelection = (playedAt: string, openedAt: number | null) => {
-  if (openedAt === null) {
-    return false;
-  }
-
-  const previousPlayedAt = parsePlayedAtTimestamp(playedAt);
-  if (previousPlayedAt <= 0 || openedAt <= previousPlayedAt) {
-    return false;
-  }
-
-  return getNextStageRotationTimestamp(previousPlayedAt) <= openedAt;
-};
-
 const uniqueStringList = (values: string[]) => Array.from(new Set(values));
 const incrementCount = (map: Map<string, number>, key: string) => {
   map.set(key, (map.get(key) ?? 0) + 1);
@@ -604,9 +578,6 @@ function App() {
 
     return {
       rule: latestRecord.rule,
-      stage: shouldResetStageSelection(latestRecord.playedAt, createModalOpenedAt)
-        ? ""
-        : latestRecord.stage,
       myCharacter: latestRecord.myCharacter,
       myRacket: latestRecord.myRacket,
       myRate: latestRecord.myRate,

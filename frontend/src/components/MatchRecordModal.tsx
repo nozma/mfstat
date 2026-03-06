@@ -27,6 +27,7 @@ import {
   STAGE_OPTIONS
 } from "../constants/options";
 import { getRateBandButtonToneSx } from "../constants/rateBandTone";
+import { predictStageFromPlayedAt } from "../utils/stagePrediction";
 
 export type MatchRecordValues = {
   playedAt: string;
@@ -107,11 +108,39 @@ const getCurrentDatetimeLocalValue = () => {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
-const buildCreateDefaults = (overrideValues?: Partial<MatchRecordValues>): MatchRecordValues => ({
-  ...defaultValues,
-  ...overrideValues,
-  playedAt: getCurrentDatetimeLocalValue()
-});
+const buildCreateDefaults = (overrideValues?: Partial<MatchRecordValues>): MatchRecordValues => {
+  const playedAt = overrideValues?.playedAt ?? getCurrentDatetimeLocalValue();
+  const predictedStage = predictStageFromPlayedAt(playedAt);
+
+  return {
+    ...defaultValues,
+    ...overrideValues,
+    playedAt,
+    stage:
+      overrideValues?.stage?.trim().length && overrideValues.stage
+        ? overrideValues.stage
+        : predictedStage ?? defaultValues.stage
+  };
+};
+
+const applyPredictedStageToCreateValues = (
+  currentValues: MatchRecordValues,
+  playedAt: string
+): MatchRecordValues => {
+  const predictedStage = predictStageFromPlayedAt(playedAt);
+  if (!predictedStage) {
+    return {
+      ...currentValues,
+      playedAt
+    };
+  }
+
+  return {
+    ...currentValues,
+    playedAt,
+    stage: predictedStage
+  };
+};
 
 type UsageStat = {
   count: number;
@@ -991,10 +1020,14 @@ function MatchRecordModal({
                     type="datetime-local"
                     value={values.playedAt}
                     onChange={(event) =>
-                      setValues((prev) => ({
-                        ...prev,
-                        playedAt: event.target.value
-                      }))
+                      setValues((prev) =>
+                        mode === "create"
+                          ? applyPredictedStageToCreateValues(prev, event.target.value)
+                          : {
+                              ...prev,
+                              playedAt: event.target.value
+                            }
+                      )
                     }
                     InputLabelProps={{ shrink: true }}
                     size="small"
